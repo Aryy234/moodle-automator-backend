@@ -1,0 +1,58 @@
+# =====================
+# Global Project Ignores
+# =====================
+
+# Environment Variables (NUNCA subir tokens/credenciales)
+.env
+.env.local
+.env.*.local
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# =====================
+# Backend (Python)
+# =====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =====================
+# Frontend (Node.js)
+# =====================
+node_modules/
+dist/
+.cache/
+*.local
+
+# =====================
+# Temporary Files
+# =====================
+*.tmp
+*.temp
+*.bak
