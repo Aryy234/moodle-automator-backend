@@ -1,289 +1,403 @@
 """
 HTML Processor Service
 
-Servicio especializado en el procesamiento y edición de contenido HTML.
-Utiliza BeautifulSoup4 para parsear y modificar enlaces de forma segura.
+Servicio especializado en el procesamiento y edición de contenido HTML
+del curso base de Moodle. Maneja:
+- Reemplazo de placeholders en href y src (links, iframes)
+- Edición de texto (título, descripción del curso)
+- Reconstrucción del horario (tabla HTML)
+- Reconstrucción de la bibliografía (lista HTML)
+
+Utiliza BeautifulSoup4 para parsear y modificar de forma segura.
 """
 
 import re
-from typing import List, Tuple, Optional
-from urllib.parse import urlparse
+from typing import List, Tuple, Optional, Dict
 from bs4 import BeautifulSoup, Tag
 
-from app.schemas.editor import LinkFound
+from app.schemas.editor import (
+    PlaceholderFound,
+    ScheduleUpdateRequest,
+    BibliographyUpdateRequest,
+    ReplacementDetail,
+)
+
+
+# Placeholders conocidos del template de Moodle
+KNOWN_PLACEHOLDERS: Dict[str, str] = {
+    "video-introductorio": "Video introductorio (iframe src)",
+    "unirse-clases": "Enlace de clases (href)",
+    "url-grabaciones": "Grabaciones (href)",
+    "perfil-docente": "Perfil del docente (iframe src)",
+    "silabo": "Sílabo (iframe src)",
+    "pea": "PEA (iframe src)",
+    "bibliografia": "Bibliografía (href)",
+}
 
 
 class HTMLProcessor:
     """
-    Procesador de HTML para edición de enlaces.
-    
-    Esta clase encapsula toda la lógica de manipulación de HTML,
-    permitiendo buscar, analizar y reemplazar enlaces de forma segura.
+    Procesador de HTML para el template del curso base de Moodle.
     """
-    
-    # Patrones comunes para identificar links de perfiles de docentes
-    TEACHER_PROFILE_PATTERNS = [
-        r'/user/view\.php\?id=\d+',
-        r'/user/profile\.php\?id=\d+',
-        r'profile\.php',
-        r'/mod/page/view\.php.*perfil',
-        r'docente|profesor|teacher|instructor',
-    ]
-    
-    def __init__(self, parser: str = "lxml"):
-        """
-        Inicializa el procesador.
-        
-        Args:
-            parser: Parser de BeautifulSoup a utilizar ('lxml', 'html.parser', etc.)
-        """
+
+    def __init__(self, parser: str = "html.parser"):
         self.parser = parser
-    
-    def parse_html(self, html_content: str) -> BeautifulSoup:
-        """
-        Parsea contenido HTML.
-        
-        Args:
-            html_content: String con contenido HTML
-            
-        Returns:
-            Objeto BeautifulSoup parseado
-        """
-        return BeautifulSoup(html_content, self.parser)
-    
-    def find_all_links(self, html_content: str) -> List[dict]:
-        """
-        Encuentra todos los enlaces en el contenido HTML.
-        
-        Args:
-            html_content: Contenido HTML a analizar
-            
-        Returns:
-            Lista de diccionarios con información de cada enlace
-        """
-        soup = self.parse_html(html_content)
-        links = []
-        
-        for link in soup.find_all('a', href=True):
-            link_info = {
-                'href': link['href'],
-                'text': link.get_text(strip=True),
-                'attributes': dict(link.attrs),
-                'context': self._get_link_context(link)
-            }
-            links.append(link_info)
-        
-        return links
-    
-    def _get_link_context(self, link_tag: Tag, chars: int = 100) -> str:
-        """
-        Obtiene el contexto HTML alrededor de un enlace.
-        
-        Args:
-            link_tag: Tag del enlace
-            chars: Cantidad de caracteres de contexto
-            
-        Returns:
-            String con el contexto HTML
-        """
-        parent = link_tag.parent
-        if parent:
-            context = str(parent)
-            if len(context) > chars * 2:
-                # Truncar si es muy largo
-                context = context[:chars] + "..." + context[-chars:]
-            return context
-        return str(link_tag)
-    
-    def is_teacher_profile_link(self, href: str, link_text: str = "") -> bool:
-        """
-        Determina si un enlace es probablemente un link de perfil de docente.
-        
-        Args:
-            href: URL del enlace
-            link_text: Texto del enlace
-            
-        Returns:
-            True si parece ser un link de perfil de docente
-        """
-        combined = f"{href} {link_text}".lower()
-        
-        for pattern in self.TEACHER_PROFILE_PATTERNS:
-            if re.search(pattern, combined, re.IGNORECASE):
-                return True
-        
-        return False
-    
-    def find_teacher_profile_links(self, html_content: str) -> List[dict]:
-        """
-        Encuentra específicamente los enlaces que parecen ser perfiles de docentes.
-        
-        Args:
-            html_content: Contenido HTML a analizar
-            
-        Returns:
-            Lista de enlaces identificados como perfiles de docentes
-        """
-        all_links = self.find_all_links(html_content)
-        teacher_links = []
-        
-        for link in all_links:
-            if self.is_teacher_profile_link(link['href'], link['text']):
-                teacher_links.append(link)
-        
-        return teacher_links
-    
-    def replace_link(
-        self, 
-        html_content: str, 
-        old_url: str, 
-        new_url: str,
-        exact_match: bool = True
-    ) -> Tuple[str, int]:
-        """
-        Reemplaza un enlace específico en el contenido HTML.
-        
-        Args:
-            html_content: Contenido HTML original
-            old_url: URL a buscar y reemplazar
-            new_url: Nueva URL
-            exact_match: Si True, busca coincidencia exacta; si False, usa contains
-            
-        Returns:
-            Tupla con (HTML modificado, cantidad de reemplazos)
-        """
-        soup = self.parse_html(html_content)
-        replacements = 0
-        
-        for link in soup.find_all('a', href=True):
-            href = link['href']
-            
-            if exact_match:
-                should_replace = href == old_url
-            else:
-                should_replace = old_url in href
-            
-            if should_replace:
-                link['href'] = new_url
-                replacements += 1
-        
-        return str(soup), replacements
-    
-    def replace_links_batch(
-        self,
-        html_content: str,
-        replacements: List[Tuple[str, str]],
-        exact_match: bool = True
-    ) -> Tuple[str, int]:
-        """
-        Reemplaza múltiples enlaces en una sola pasada.
-        
-        Args:
-            html_content: Contenido HTML original
-            replacements: Lista de tuplas (old_url, new_url)
-            exact_match: Si True, busca coincidencia exacta
-            
-        Returns:
-            Tupla con (HTML modificado, cantidad total de reemplazos)
-        """
-        soup = self.parse_html(html_content)
-        total_replacements = 0
-        
-        # Crear diccionario para búsqueda rápida
-        replacement_map = {old: new for old, new in replacements}
-        
-        for link in soup.find_all('a', href=True):
-            href = link['href']
-            
-            if exact_match:
-                if href in replacement_map:
-                    link['href'] = replacement_map[href]
-                    total_replacements += 1
-            else:
-                for old_url, new_url in replacements:
-                    if old_url in href:
-                        link['href'] = href.replace(old_url, new_url)
-                        total_replacements += 1
-                        break
-        
-        return str(soup), total_replacements
-    
-    def replace_teacher_profile_links(
-        self,
-        html_content: str,
-        new_teacher_url: str,
-        old_teacher_url: Optional[str] = None
-    ) -> Tuple[str, int]:
-        """
-        Reemplaza todos los enlaces de perfil de docente encontrados.
-        
-        Args:
-            html_content: Contenido HTML original
-            new_teacher_url: Nueva URL del perfil del docente
-            old_teacher_url: URL específica a reemplazar (si se omite, reemplaza todos los detectados)
-            
-        Returns:
-            Tupla con (HTML modificado, cantidad de reemplazos)
-        """
-        soup = self.parse_html(html_content)
-        replacements = 0
-        
-        for link in soup.find_all('a', href=True):
-            href = link['href']
-            text = link.get_text(strip=True)
-            
-            if old_teacher_url:
-                # Reemplazar URL específica
-                if href == old_teacher_url or old_teacher_url in href:
-                    link['href'] = new_teacher_url
-                    replacements += 1
-            else:
-                # Detectar y reemplazar automáticamente
-                if self.is_teacher_profile_link(href, text):
-                    link['href'] = new_teacher_url
-                    replacements += 1
-        
-        return str(soup), replacements
-    
-    def sanitize_html(self, html_content: str) -> str:
-        """
-        Limpia y normaliza el HTML.
-        
-        Args:
-            html_content: HTML a limpiar
-            
-        Returns:
-            HTML limpio y normalizado
-        """
-        soup = self.parse_html(html_content)
-        # BeautifulSoup automáticamente corrige HTML malformado
+
+    # ------------------------------------------------------------------
+    # UTILIDADES
+    # ------------------------------------------------------------------
+
+    def parse(self, html: str) -> BeautifulSoup:
+        return BeautifulSoup(html, self.parser)
+
+    def _serialize(self, soup: BeautifulSoup) -> str:
+        """Serializa el soup sin agregar <html><body> wrappers."""
+        # html.parser no agrega wrappers, pero por seguridad:
+        if soup.body:
+            # Si hay un body wrapper, extraer solo su contenido
+            return "".join(str(child) for child in soup.body.children)
         return str(soup)
-    
-    def extract_text(self, html_content: str) -> str:
+
+    # ------------------------------------------------------------------
+    # ESCANEO DE PLACEHOLDERS
+    # ------------------------------------------------------------------
+
+    def scan_placeholders(self, html: str) -> dict:
         """
-        Extrae solo el texto de contenido HTML.
-        
-        Args:
-            html_content: HTML del cual extraer texto
-            
-        Returns:
-            Texto plano sin tags HTML
+        Escanea el HTML y retorna todos los placeholders conocidos,
+        el título del curso, descripción, si hay horario y bibliografía.
         """
-        soup = self.parse_html(html_content)
-        return soup.get_text(separator=' ', strip=True)
+        soup = self.parse(html)
+        found: List[PlaceholderFound] = []
+
+        # Buscar en <a href="..."> y <iframe src="...">
+        for tag in soup.find_all(["a", "iframe"]):
+            attr = "href" if tag.name == "a" else "src"
+            value = tag.get(attr, "")
+            if value in KNOWN_PLACEHOLDERS:
+                context = tag.get_text(strip=True) if tag.name == "a" else ""
+                found.append(PlaceholderFound(
+                    element_type=tag.name,
+                    attribute=attr,
+                    placeholder_key=value,
+                    context_text=context or None,
+                ))
+
+        # Título del curso (<h1> dentro de .texto)
+        title_tag = soup.select_one(".texto h1") or soup.find("h1")
+        course_title = title_tag.get_text(strip=True) if title_tag else None
+
+        # Descripción (<p> debajo de ese <h1>)
+        course_desc = None
+        if title_tag:
+            next_p = title_tag.find_next_sibling("p")
+            if next_p:
+                course_desc = next_p.get_text(strip=True)
+
+        # Horario
+        schedule_found = soup.find("div", id="cronograma") is not None
+
+        # Bibliografía
+        bib_found = soup.find("div", id="biblio") is not None
+
+        return {
+            "placeholders": found,
+            "total_placeholders": len(found),
+            "course_title": course_title,
+            "course_description": course_desc,
+            "schedule_found": schedule_found,
+            "bibliography_found": bib_found,
+        }
+
+    # ------------------------------------------------------------------
+    # REEMPLAZO DE PLACEHOLDERS (href / src)
+    # ------------------------------------------------------------------
+
+    def replace_placeholder(
+        self, html: str, placeholder: str, new_value: str
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """
+        Reemplaza un placeholder en href o src por un nuevo valor.
+        Retorna (html_modificado, lista_de_detalles).
+        """
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        for tag in soup.find_all(["a", "iframe"]):
+            attr = "href" if tag.name == "a" else "src"
+            if tag.get(attr) == placeholder:
+                tag[attr] = new_value
+                details.append(ReplacementDetail(
+                    field=f"{tag.name}[{attr}]={placeholder}",
+                    old_value=placeholder,
+                    new_value=new_value,
+                ))
+
+        return self._serialize(soup), details
+
+    def replace_placeholders_batch(
+        self, html: str, replacements: Dict[str, str]
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """
+        Reemplaza múltiples placeholders en una sola pasada.
+        replacements: {placeholder: new_value}
+        """
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        for tag in soup.find_all(["a", "iframe"]):
+            attr = "href" if tag.name == "a" else "src"
+            value = tag.get(attr, "")
+            if value in replacements:
+                new_val = replacements[value]
+                tag[attr] = new_val
+                details.append(ReplacementDetail(
+                    field=f"{tag.name}[{attr}]={value}",
+                    old_value=value,
+                    new_value=new_val,
+                ))
+
+        return self._serialize(soup), details
+
+    # ------------------------------------------------------------------
+    # EDICIÓN DE TEXTO: TÍTULO Y DESCRIPCIÓN
+    # ------------------------------------------------------------------
+
+    def replace_course_title(
+        self, html: str, new_title: str
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """Reemplaza el contenido del <h1> del curso."""
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        h1 = soup.select_one(".texto h1") or soup.find("h1")
+        if h1:
+            old = h1.get_text(strip=True)
+            h1.string = new_title
+            details.append(ReplacementDetail(
+                field="course_title",
+                old_value=old,
+                new_value=new_title,
+            ))
+
+        return self._serialize(soup), details
+
+    def replace_course_description(
+        self, html: str, new_desc: str
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """Reemplaza la descripción (<p> que sigue al <h1>)."""
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        h1 = soup.select_one(".texto h1") or soup.find("h1")
+        if h1:
+            p = h1.find_next_sibling("p")
+            if p:
+                old = p.get_text(strip=True)
+                p.string = new_desc
+                details.append(ReplacementDetail(
+                    field="course_description",
+                    old_value=old,
+                    new_value=new_desc,
+                ))
+
+        return self._serialize(soup), details
+
+    # ------------------------------------------------------------------
+    # HORARIO
+    # ------------------------------------------------------------------
+
+    def replace_schedule(
+        self, html: str, schedule: ScheduleUpdateRequest
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """
+        Reconstruye el <tbody> de la tabla de horario dentro del
+        modal #cronograma, y actualiza las cabeceras de días.
+        """
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        modal = soup.find("div", id="cronograma")
+        if not modal:
+            return self._serialize(soup), details
+
+        table = modal.find("table")
+        if not table:
+            return self._serialize(soup), details
+
+        # --- Actualizar cabecera de días ---
+        thead = table.find("thead")
+        if thead:
+            header_rows = thead.find_all("tr")
+            # La segunda fila del thead contiene los días
+            if len(header_rows) >= 2:
+                day_row = header_rows[1]
+                ths = day_row.find_all("th")
+                # El primer th es "Asignatura", los demás son días
+                new_days = schedule.days_columns
+                # Actualizar colspan del título
+                title_row = header_rows[0]
+                title_th = title_row.find("th")
+                if title_th:
+                    title_th["colspan"] = str(1 + len(new_days))
+
+                # Reconstruir fila de cabecera
+                day_row.clear()
+                # Asignatura
+                asig_th = soup.new_tag("th", style="border: 2px solid #c7c6c6;")
+                asig_th.string = "Asignatura"
+                day_row.append(asig_th)
+                for day_name in new_days:
+                    th = soup.new_tag("th", style="border: 2px solid #c7c6c6;")
+                    th.string = day_name
+                    day_row.append(th)
+
+        # --- Reconstruir tbody ---
+        tbody = table.find("tbody")
+        if not tbody:
+            tbody = soup.new_tag("tbody")
+            table.append(tbody)
+
+        old_text = tbody.get_text(strip=True)
+        tbody.clear()
+
+        for entry in schedule.entries:
+            tr = soup.new_tag("tr")
+
+            # Celda asignatura
+            td_subj = soup.new_tag(
+                "td",
+                **{
+                    "class": "fw-bold fs-6",
+                    "style": "border: 2px solid #c7c6c6; background: #ffffff; color: #931913;",
+                },
+            )
+            td_subj.string = entry.subject_name
+            tr.append(td_subj)
+
+            # Celdas de horarios por día
+            for day in schedule.days_columns:
+                td = soup.new_tag(
+                    "td",
+                    **{
+                        "class": "fw-semibold",
+                        "style": "border: 2px solid #c7c6c6;",
+                    },
+                )
+                td.string = entry.days.get(day, "—")
+                tr.append(td)
+
+            tbody.append(tr)
+
+        new_text = tbody.get_text(strip=True)
+        details.append(ReplacementDetail(
+            field="schedule",
+            old_value=old_text[:100] + ("..." if len(old_text) > 100 else ""),
+            new_value=new_text[:100] + ("..." if len(new_text) > 100 else ""),
+        ))
+
+        return self._serialize(soup), details
+
+    # ------------------------------------------------------------------
+    # BIBLIOGRAFÍA
+    # ------------------------------------------------------------------
+
+    def replace_bibliography(
+        self, html: str, bibliography: BibliographyUpdateRequest
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """
+        Reconstruye la lista <ul> del modal #biblio con las nuevas entradas.
+        """
+        soup = self.parse(html)
+        details: List[ReplacementDetail] = []
+
+        modal = soup.find("div", id="biblio")
+        if not modal:
+            return self._serialize(soup), details
+
+        ul = modal.find("ul")
+        if not ul:
+            return self._serialize(soup), details
+
+        old_text = ul.get_text(strip=True)
+        ul.clear()
+
+        for entry in bibliography.entries:
+            li = soup.new_tag("li", **{"class": "list-group-item"})
+            a = soup.new_tag(
+                "a",
+                href=entry.url,
+                target="_blank",
+                rel="noopener noreferrer",
+                **{"class": "text-decoration-none"},
+            )
+            # Usar NavigableString para el texto
+            from bs4 import NavigableString
+            a.append(NavigableString(f" • {entry.text} "))
+            li.append(a)
+            ul.append(li)
+
+        new_text = ul.get_text(strip=True)
+        details.append(ReplacementDetail(
+            field="bibliography",
+            old_value=old_text[:100] + ("..." if len(old_text) > 100 else ""),
+            new_value=new_text[:100] + ("..." if len(new_text) > 100 else ""),
+        ))
+
+        return self._serialize(soup), details
+
+    # ------------------------------------------------------------------
+    # MÉTODO ALL-IN-ONE
+    # ------------------------------------------------------------------
+
+    def customize_html(
+        self,
+        html: str,
+        placeholders: Optional[Dict[str, str]] = None,
+        course_title: Optional[str] = None,
+        course_description: Optional[str] = None,
+        schedule: Optional[ScheduleUpdateRequest] = None,
+        bibliography: Optional[BibliographyUpdateRequest] = None,
+    ) -> Tuple[str, List[ReplacementDetail]]:
+        """
+        Aplica todas las personalizaciones sobre el HTML en una sola pasada.
+        Retorna (html_final, lista_de_detalles).
+        """
+        all_details: List[ReplacementDetail] = []
+
+        # 1. Placeholders (links / iframes)
+        if placeholders:
+            html, details = self.replace_placeholders_batch(html, placeholders)
+            all_details.extend(details)
+
+        # 2. Título
+        if course_title:
+            html, details = self.replace_course_title(html, course_title)
+            all_details.extend(details)
+
+        # 3. Descripción
+        if course_description:
+            html, details = self.replace_course_description(html, course_description)
+            all_details.extend(details)
+
+        # 4. Horario
+        if schedule:
+            html, details = self.replace_schedule(html, schedule)
+            all_details.extend(details)
+
+        # 5. Bibliografía
+        if bibliography:
+            html, details = self.replace_bibliography(html, bibliography)
+            all_details.extend(details)
+
+        return html, all_details
 
 
-# Instancia singleton del procesador
+# Instancia singleton
 _html_processor: Optional[HTMLProcessor] = None
 
 
 def get_html_processor() -> HTMLProcessor:
-    """
-    Obtiene la instancia global del procesador HTML.
-    
-    Returns:
-        HTMLProcessor: Instancia del procesador
-    """
     global _html_processor
     if _html_processor is None:
         _html_processor = HTMLProcessor()

@@ -1,79 +1,85 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+/* ========== Paleta Pastel Personalizada ========== */
+@theme {
+  --color-pastel-pink: #f8d7e8;
+  --color-pastel-purple: #e8d5f5;
+  --color-pastel-blue: #d5e8f8;
+  --color-pastel-mint: #d5f5e3;
+  --color-pastel-yellow: #fef9e7;
+  --color-pastel-peach: #fde8d0;
+  --color-pastel-lavender: #e8e0f0;
+  --color-pastel-sky: #dbeafe;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-primary: #bf212d;
+  --color-primary-light: #e35a67;
+  --color-primary-dark: #8a1821;
+  --color-secondary: #f472b6;
+  --color-accent: #38bdf8;
+
+  --color-surface: #faf8ff;
+  --color-surface-alt: #f1eeff;
+  --color-surface-card: #ffffff;
+  --color-border-soft: #e8e0f0;
+
+  --color-text-primary: #2d2446;
+  --color-text-secondary: #6b5f85;
+  --color-text-muted: #9b92b0;
+
+  --color-success: #6ee7b7;
+  --color-success-dark: #10b981;
+  --color-warning: #fcd34d;
+  --color-warning-dark: #f59e0b;
+  --color-danger: #fca5a5;
+  --color-danger-dark: #ef4444;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
+/* ========== Base Styles ========== */
 body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
   min-height: 100vh;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+html {
+  scroll-behavior: smooth;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+::-webkit-scrollbar {
+  width: 6px;
 }
-button:hover {
-  border-color: #646cff;
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-soft);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
 }
 
-.card {
-  padding: 2em;
+/* ========== Vue Transitions ========== */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }

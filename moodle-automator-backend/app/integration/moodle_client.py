@@ -6,6 +6,7 @@ Encapsula todas las llamadas a la API de Moodle en un solo lugar.
 """
 
 import httpx
+import json
 from typing import Any, Dict, List, Optional
 from app.core.config import settings
 
@@ -91,6 +92,13 @@ class MoodleClient:
             
             # Moodle retorna errores en el JSON, no como HTTP errors
             if isinstance(result, dict) and "exception" in result:
+                # Log completo para depuración
+                print(f"⚠️  Moodle API Error en '{wsfunction}':")
+                print(f"   exception: {result.get('exception')}")
+                print(f"   errorcode: {result.get('errorcode')}")
+                print(f"   message: {result.get('message')}")
+                print(f"   debuginfo: {result.get('debuginfo', 'N/A')}")
+                
                 raise MoodleAPIError(
                     message=result.get("message", "Error desconocido de Moodle"),
                     error_code=result.get("errorcode"),
@@ -211,6 +219,90 @@ class MoodleClient:
         
         await self._call_api("core_course_update_courses", params)
     
+    async def update_section_summary(
+        self,
+        course_id: int,
+        section_id: int,
+        section_number: int,
+        summary: str,
+    ) -> None:
+        """
+        Actualiza el summary (resumen HTML) de una sección del curso.
+
+        Usa local_sectionedit_update_section_summary (plugin personalizado)
+        que escribe directamente en mdl_course_sections.summary.
+
+        Requiere instalar el plugin local_sectionedit en Moodle y agregar
+        la función al servicio web del token.
+
+        Args:
+            course_id: ID del curso (solo para logs; el plugin lo resuelve desde section_id)
+            section_id: ID de la sección (mdl_course_sections.id)
+            section_number: Número de la sección (0 = General)
+            summary: Nuevo contenido HTML del summary
+        """
+        params = {
+            "sectionid": section_id,
+            "summary": summary,
+            "summaryformat": 1,  # FORMAT_HTML
+        }
+
+        try:
+            result = await self._call_api(
+                "local_sectionedit_update_section_summary", params
+            )
+            print(f"✅ Section summary actualizado (section_id={section_id})")
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudo actualizar la sección: falta la función "
+                        "local_sectionedit_update_section_summary en tu servicio web de Moodle. "
+                        "Instala el plugin local_sectionedit y agrega la función desde: "
+                        "Administración del sitio → Servidor → Servicios externos → "
+                        "[tu servicio] → Funciones → Agregar."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
+    # ==================== LABEL OPERATIONS ====================
+    
+    async def update_label(self, instance_id: int, new_content: str) -> None:
+        """
+        Actualiza el contenido (intro) de un label en Moodle.
+        
+        Usa mod_label_update_label si está disponible, o 
+        core_course_edit_module como fallback.
+        
+        Args:
+            instance_id: ID de la instancia del label (no el cmid)
+            new_content: Nuevo contenido HTML del label
+        """
+        params = {
+            "labels[0][id]": instance_id,
+            "labels[0][intro]": new_content,
+            "labels[0][introformat]": 1,  # HTML format
+        }
+        
+        try:
+            await self._call_api("mod_label_update_labels", params)
+        except MoodleAPIError as e:
+            # Fallback: si mod_label_update_labels no existe, intentar 
+            # con una llamada directa
+            if "accessexception" in str(e.error_code or "").lower() or \
+               "invalidrecord" in str(e.error_code or "").lower():
+                raise
+            # Si la función no existe, re-lanzar con mensaje claro
+            raise MoodleAPIError(
+                message=f"No se pudo actualizar el label (instance={instance_id}): {e.message}. "
+                        "Asegúrate de que tu token tiene acceso a mod_label_update_labels.",
+                error_code=e.error_code,
+                debug_info=e.debug_info,
+            )
+
     # ==================== MODULE OPERATIONS ====================
     
     async def get_page_content(self, page_id: int) -> Dict[str, Any]:

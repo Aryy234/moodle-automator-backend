@@ -88,7 +88,19 @@ async def get_course_contents(
             "sections": contents
         }
     except MoodleAPIError as e:
-        raise HTTPException(status_code=400, detail=e.message)
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "message": e.message,
+                "error_code": e.error_code,
+                "debug_info": e.debug_info,
+                "hint": (
+                    "Este error proviene del servidor Moodle, no del backend local. "
+                    "Intenta purgar las cachés de Moodle desde "
+                    "Administración del sitio > Desarrollo > Purgar todas las cachés."
+                )
+            }
+        )
 
 
 @router.get(
