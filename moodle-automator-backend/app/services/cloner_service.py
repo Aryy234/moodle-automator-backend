@@ -388,7 +388,11 @@ class ClonerService:
                     links_updated=0,
                 )
 
-            target_category = request.category_id or source_course.categoryid or 1
+            # Forzar duplicación en category_id=1 si no se especifica explícitamente
+            if request.category_id is not None:
+                target_category = request.category_id
+            else:
+                target_category = 1
 
             self._update_progress("duplicating", 30, "Duplicando curso en Moodle...")
             duplicate_result = await self.moodle.duplicate_course(
