@@ -20,6 +20,8 @@ export const getCourseContents = (courseId) => api.get(`/courses/${courseId}/con
 
 export const duplicateCourse = (data) => api.post('/courses/duplicate', data)
 
+export const updateCourse = (courseId, data) => api.patch(`/courses/${courseId}`, data)
+
 // ========== Editor ==========
 export const scanCourse = (courseId) => api.get(`/editor/scan/${courseId}`)
 

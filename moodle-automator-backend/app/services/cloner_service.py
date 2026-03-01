@@ -557,6 +557,7 @@ class ClonerService:
                 shortname=request.new_shortname,
                 category_id=target_category,
                 visible=request.visible,
+                idnumber=request.new_idnumber,
             )
 
             new_course_id = duplicate_result.get("id")

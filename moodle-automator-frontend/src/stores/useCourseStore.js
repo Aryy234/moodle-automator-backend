@@ -4,6 +4,7 @@ import {
   checkHealth,
   getCourses,
   getCourseContents,
+  updateCourse,
   scanCourse,
   previewChanges,
   applyChanges,
@@ -42,6 +43,7 @@ export const useCourseStore = defineStore('course', () => {
   // Formulario de personalización
   const formData = ref({
     course_id: null,
+    idnumber: null,
     // Placeholders (sección General)
     video_introductorio: null,
     unirse_clases: null,
@@ -77,6 +79,7 @@ export const useCourseStore = defineStore('course', () => {
     source_course_id: null,
     new_fullname: '',
     new_shortname: '',
+    new_idnumber: '',
     category_id: null,
     visible: 0,
     new_teacher_profile_url: null,
@@ -150,6 +153,12 @@ export const useCourseStore = defineStore('course', () => {
       if (scanData.course_title) formData.value.course_title = scanData.course_title
       if (scanData.course_description) formData.value.course_description = scanData.course_description
 
+      // Pre-llenar idnumber con el valor actual del curso (viene del listado de cursos)
+      const existingIdnumber = selectedCourse.value?.idnumber
+      if (existingIdnumber !== undefined && existingIdnumber !== null) {
+        formData.value.idnumber = existingIdnumber
+      }
+
       // Guardar secciones con id y nombre para el selector
       if (contentsData?.sections) {
         courseSections.value = contentsData.sections.map((s) => ({
@@ -194,11 +203,21 @@ export const useCourseStore = defineStore('course', () => {
     loading.value.apply = true
     errors.value.apply = null
     try {
+      // Actualizar idnumber si se proporcionó — no bloqueante (fallo silencioso)
+      if (formData.value.idnumber !== null && formData.value.idnumber !== undefined) {
+        try {
+          await updateCourse(formData.value.course_id, {
+            idnumber: formData.value.idnumber.trim()
+          })
+        } catch (_) {
+          console.warn('No se pudo actualizar el idnumber:', _)
+        }
+      }
       const payload = buildPayload()
       const { data } = await applyChanges(payload)
       return data
     } catch (err) {
-      errors.value.apply = err.response?.data?.detail || 'Error al aplicar los cambios'
+      errors.value.apply = err.response?.data?.detail || err.message || 'Error al aplicar los cambios'
     } finally {
       loading.value.apply = false
     }
@@ -208,7 +227,17 @@ export const useCourseStore = defineStore('course', () => {
     loading.value.duplicate = true
     errors.value.duplicate = null
     try {
-      const { data } = await duplicateCourse(duplicateForm.value)
+      const df = duplicateForm.value
+      const payload = {
+        source_course_id: df.source_course_id,
+        new_fullname: df.new_fullname,
+        new_shortname: df.new_shortname,
+        category_id: df.category_id ?? null,
+        visible: df.visible ?? 0,
+      }
+      if (df.new_idnumber?.trim()) payload.new_idnumber = df.new_idnumber.trim()
+      if (df.new_teacher_profile_url?.trim()) payload.new_teacher_profile_url = df.new_teacher_profile_url.trim()
+      const { data } = await duplicateCourse(payload)
       return data
     } catch (err) {
       errors.value.duplicate = err.response?.data?.detail || 'Error al duplicar el curso'
@@ -286,6 +315,7 @@ export const useCourseStore = defineStore('course', () => {
   function resetForm() {
     formData.value = {
       course_id: null,
+      idnumber: null,
       video_introductorio: null,
       unirse_clases: null,
       url_grabaciones: null,

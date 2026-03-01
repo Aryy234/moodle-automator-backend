@@ -231,6 +231,20 @@
               />
             </div>
 
+            <!-- Número ID del curso -->
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">Número ID del curso (opcional)</label>
+              <input
+                type="text"
+                v-model="store.duplicateForm.new_idnumber"
+                class="w-full px-4 py-2.5 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                       placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+                       transition-all"
+                placeholder="Ej: MAT-2025-A"
+              />
+              <p class="mt-1 text-[11px] text-text-muted">Identificador interno en Moodle (Administración del curso → Número ID). Déjalo vacío si no lo necesitas.</p>
+            </div>
+
             <!-- URL perfil docente -->
             <div>
               <label class="block text-xs font-medium text-text-secondary mb-1.5">URL del Perfil del Docente (opcional)</label>

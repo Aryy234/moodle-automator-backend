@@ -1,6 +1,32 @@
 <template>
   <div class="space-y-6">
-    <!-- Título y Descripción del curso -->
+    <!-- Número ID del curso -->
+    <div class="bg-surface-card rounded-2xl border border-border-soft p-6">
+      <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+        <span class="w-6 h-6 rounded-lg bg-pastel-peach flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-warning-dark" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+        </span>
+        Número ID del Curso
+      </h3>
+      <input
+        type="text"
+        v-model="form.idnumber"
+        class="w-full px-4 py-2.5 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+               placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+               transition-all duration-200"
+        placeholder="Ej: MAT-2025-A"
+      />
+      <p class="mt-1.5 text-[11px] text-text-muted">
+        Identificador interno del curso en Moodle (Administración del curso → Número ID del curso).
+        Se aplicará al guardar. Déjalo vacío si no deseas modificarlo.
+      </p>
+    </div>
+
+
     <div v-if="scanResult?.course_title !== undefined || scanResult?.course_description !== undefined"
          class="bg-surface-card rounded-2xl border border-border-soft p-6">
       <h3 class="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">

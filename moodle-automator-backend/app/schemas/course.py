@@ -17,6 +17,7 @@ class CourseBase(BaseModel):
 class CourseFromMoodle(CourseBase):
     """Schema para cursos obtenidos desde Moodle"""
     id: int = Field(..., description="ID único del curso en Moodle")
+    idnumber: Optional[str] = Field(None, description="Número ID interno del curso")
     categoryid: Optional[int] = Field(None, description="ID de la categoría del curso")
     summary: Optional[str] = Field(None, description="Resumen del curso")
     summaryformat: Optional[int] = Field(1, description="Formato del resumen")
@@ -31,12 +32,17 @@ class CourseDuplicateRequest(BaseModel):
     source_course_id: int = Field(..., description="ID del curso origen a duplicar")
     new_fullname: str = Field(..., description="Nombre completo del nuevo curso")
     new_shortname: str = Field(..., description="Nombre corto del nuevo curso")
+    new_idnumber: Optional[str] = Field(
+        None,
+        description="Número ID interno del nuevo curso (campo 'idnumber' en Moodle). "
+                    "Ej: 'MAT-2025-A'. Si no se especifica, queda vacío."
+    )
     category_id: Optional[int] = Field(None, description="ID de la categoría destino (opcional)")
     visible: int = Field(0, description="Visibilidad inicial del nuevo curso")
-    
+
     # Configuración de personalización de links
     new_teacher_profile_url: Optional[str] = Field(
-        None, 
+        None,
         description="Nueva URL del perfil del docente para reemplazar en el contenido"
     )
 

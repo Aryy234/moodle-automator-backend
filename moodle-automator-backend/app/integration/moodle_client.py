@@ -160,30 +160,45 @@ class MoodleClient:
         fullname: str,
         shortname: str,
         category_id: int,
-        visible: int = 0
+        visible: int = 0,
+        idnumber: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Duplica un curso existente.
-        
+
         Args:
-            course_id: ID del curso origen
-            fullname: Nombre completo del nuevo curso
-            shortname: Nombre corto del nuevo curso
+            course_id:   ID del curso origen
+            fullname:    Nombre completo del nuevo curso
+            shortname:   Nombre corto del nuevo curso
             category_id: ID de la categoría destino
-            visible: Visibilidad inicial (0=oculto, 1=visible)
-            
+            visible:     Visibilidad inicial (0=oculto, 1=visible)
+            idnumber:    Número ID interno opcional (campo idnumber de Moodle)
+
         Returns:
             Datos del nuevo curso creado (incluyendo su ID)
         """
         params = {
-            "courseid": course_id,
-            "fullname": fullname,
-            "shortname": shortname,
+            "courseid":   course_id,
+            "fullname":   fullname,
+            "shortname":  shortname,
             "categoryid": category_id,
-            "visible": visible
+            "visible":    visible,
         }
-        
-        return await self._call_api("core_course_duplicate_course", params)
+
+        result = await self._call_api("core_course_duplicate_course", params)
+
+        # core_course_duplicate_course no acepta idnumber directamente,
+        # así que lo actualizamos en un segundo paso si se especificó.
+        if idnumber is not None:
+            new_id = result.get("id")
+            if new_id:
+                await self._call_api(
+                    "core_course_update_courses",
+                    {"courses[0][id]": new_id, "courses[0][idnumber]": idnumber},
+                )
+                print(f"✅ idnumber='{idnumber}' asignado al curso {new_id}")
+
+        return result
     
     async def get_course_contents(self, course_id: int) -> List[Dict[str, Any]]:
         """
