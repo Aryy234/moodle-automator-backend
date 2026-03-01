@@ -190,19 +190,180 @@ class ClonerService:
         preview_only: bool = False,
     ) -> CourseCustomizationResponse:
         """
-        Personaliza el HTML de la sección General:
-        1. Lee el HTML actual del label
-        2. Aplica reemplazos (placeholders, título, horario, bibliografía)
-        3. Si no es preview, actualiza en Moodle vía API
-
-        Args:
-            request: Datos de personalización
-            preview_only: Si True, solo retorna el HTML sin guardarlo
+        Personaliza el HTML de una o varias secciones del curso.
+        Si se envía 'sections', personaliza cada sección indicada.
+        Si no, usa el modo legacy (solo General).
         """
         try:
+            all_details = []
+            processed_htmls = {}
+            total_replacements = 0
+            # Si se envía 'sections', procesar cada sección
+            if request.sections:
+                # Obtener contenidos de todas las secciones
+                contents = await self.moodle.get_course_contents(request.course_id)
+                section_map = {s["id"]: s for s in contents}
+                for section_req in request.sections:
+                    section_id = section_req.section_id
+                    section = section_map.get(section_id)
+                    if not section:
+                        all_details.append(ReplacementDetail(
+                            field=f"section_{section_id}",
+                            old_value="",
+                            new_value="No se encontró la sección en el curso"
+                        ))
+                        continue
+                    html = section.get("summary", "")
+
+                    # --- Construir placeholders ---
+                    placeholders = {}
+                    if section_req.video_introductorio:
+                        placeholders["video-introductorio"] = section_req.video_introductorio
+                    if section_req.unirse_clases:
+                        placeholders["unirse-clases"] = section_req.unirse_clases
+                    if section_req.url_grabaciones:
+                        placeholders["url-grabaciones"] = section_req.url_grabaciones
+                    if section_req.perfil_docente:
+                        placeholders["perfil-docente"] = section_req.perfil_docente
+                    if section_req.silabo:
+                        placeholders["silabo"] = section_req.silabo
+                    if section_req.pea:
+                        placeholders["pea"] = section_req.pea
+                    if section_req.bibliografia_url:
+                        placeholders["bibliografia"] = section_req.bibliografia_url
+
+                    # --- Personalizar SOLO el summary de la sección (sin bloques avanzados) ---
+                    new_html, details = self.html_processor.customize_html(
+                        html=html,
+                        placeholders=placeholders if placeholders else None,
+                        course_title=section_req.course_title,
+                        course_description=section_req.course_description,
+                        schedule=section_req.schedule,
+                        bibliography=section_req.bibliography,
+                        # Los bloques avanzados se crean como labels SEPARADOS (ver abajo)
+                        presentations=None,
+                        presentation_objective=None,
+                        main_reading=None,
+                        suggested_readings=None,
+                        videos=None,
+                        videos_summary=None,
+                    )
+                    all_details.extend(details)
+                    total_replacements += len(details)
+
+                    # --- Guardar summary en Moodle si corresponde ---
+                    section_blocks_preview: dict = {}
+                    if not preview_only and details:
+                        await self.moodle.update_section_summary(
+                            course_id=request.course_id,
+                            section_id=section_id,
+                            section_number=section_req.section_number or 0,
+                            summary=new_html,
+                        )
+
+                    # =======================================================
+                    # BLOQUES AVANZADOS — cada uno como un label separado
+                    # =======================================================
+                    presentations = getattr(section_req, "presentations", None)
+                    presentation_objective = getattr(section_req, "presentation_objective", None)
+                    main_reading = getattr(section_req, "main_reading", None)
+                    suggested_readings = getattr(section_req, "suggested_readings", None)
+                    videos = getattr(section_req, "videos", None)
+                    videos_summary = getattr(section_req, "videos_summary", None)
+
+                    # -- Bloque de presentaciones --
+                    if presentations:
+                        pres_html = self.html_processor.render_presentations_block(
+                            presentations, presentation_objective
+                        )
+                        if not preview_only:
+                            await self.moodle.create_label_in_section(
+                                course_id=request.course_id,
+                                section_id=section_id,
+                                content=pres_html,
+                                name="Presentación",
+                            )
+                            print(f"📊 Label 'Presentación' creado en sección {section_id}")
+                        else:
+                            section_blocks_preview["presentations_block"] = pres_html
+                        all_details.append(ReplacementDetail(
+                            field="presentations_block",
+                            old_value="",
+                            new_value="Bloque de presentaciones creado como label independiente",
+                        ))
+                        total_replacements += 1
+
+                    # -- Bloque de lecturas --
+                    if main_reading:
+                        reading_html = self.html_processor.render_main_reading_block(
+                            main_reading,
+                            suggested_readings,
+                            collapse_label=getattr(section_req, "reading_collapse_label", None) or "Lectura",
+                            reading_section_title=getattr(section_req, "reading_section_title", None) or "Lectura principal",
+                            main_button_text=getattr(section_req, "reading_button_text", None) or "Ver lectura",
+                            suggested_title=getattr(section_req, "reading_suggested_title", None) or "Lecturas sugeridas",
+                        )
+                        if not preview_only:
+                            await self.moodle.create_label_in_section(
+                                course_id=request.course_id,
+                                section_id=section_id,
+                                content=reading_html,
+                                name="Lectura",
+                            )
+                            print(f"📖 Label 'Lectura' creado en sección {section_id}")
+                        else:
+                            section_blocks_preview["reading_block"] = reading_html
+                        all_details.append(ReplacementDetail(
+                            field="reading_block",
+                            old_value="",
+                            new_value="Bloque de lectura creado como label independiente",
+                        ))
+                        total_replacements += 1
+
+                    # -- Bloque de videos --
+                    if videos:
+                        videos_html = self.html_processor.render_videos_block(
+                            videos, videos_summary
+                        )
+                        if not preview_only:
+                            await self.moodle.create_label_in_section(
+                                course_id=request.course_id,
+                                section_id=section_id,
+                                content=videos_html,
+                                name="Video",
+                            )
+                            print(f"🎥 Label 'Video' creado en sección {section_id}")
+                        else:
+                            section_blocks_preview["videos_block"] = videos_html
+                        all_details.append(ReplacementDetail(
+                            field="videos_block",
+                            old_value="",
+                            new_value="Bloque de video creado como label independiente",
+                        ))
+                        total_replacements += 1
+
+                    # Registrar el preview de esta sección
+                    processed_htmls[section_id] = {
+                        "summary": new_html,
+                        **section_blocks_preview,
+                    }
+
+                msg = f"Se personalizaron {len(request.sections)} secciones. Total de cambios: {total_replacements}"
+                processed_html_str = None
+                if preview_only:
+                    import json
+                    processed_html_str = json.dumps(processed_htmls, ensure_ascii=False, indent=2)
+                return CourseCustomizationResponse(
+                    success=True,
+                    course_id=request.course_id,
+                    message=msg + (" (preview, no guardados)" if preview_only else " exitosamente"),
+                    total_replacements=total_replacements,
+                    details=all_details,
+                    processed_html=processed_html_str if preview_only else None,
+                )
+            # Legacy: solo General
             # 1. Obtener HTML actual
             html, section_info = await self._get_general_section_html(request.course_id)
-
             # 2. Construir mapa de placeholders
             placeholders: Dict[str, str] = {}
             if request.video_introductorio:
@@ -219,7 +380,6 @@ class ClonerService:
                 placeholders["pea"] = request.pea
             if request.bibliografia_url:
                 placeholders["bibliografia"] = request.bibliografia_url
-
             # 3. Aplicar personalizaciones
             new_html, details = self.html_processor.customize_html(
                 html=html,
@@ -229,7 +389,6 @@ class ClonerService:
                 schedule=request.schedule,
                 bibliography=request.bibliography,
             )
-
             if not details:
                 return CourseCustomizationResponse(
                     success=True,
@@ -239,7 +398,6 @@ class ClonerService:
                     details=[],
                     processed_html=new_html if preview_only else None,
                 )
-
             # 4. Guardar en Moodle (si no es preview)
             if not preview_only:
                 await self._update_html_in_moodle(
@@ -247,7 +405,6 @@ class ClonerService:
                     section_info=section_info,
                     new_html=new_html,
                 )
-
             return CourseCustomizationResponse(
                 success=True,
                 course_id=request.course_id,
@@ -257,7 +414,6 @@ class ClonerService:
                 details=details,
                 processed_html=new_html if preview_only else None,
             )
-
         except MoodleAPIError as e:
             return CourseCustomizationResponse(
                 success=False,

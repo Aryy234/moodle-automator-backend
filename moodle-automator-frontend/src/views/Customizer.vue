@@ -89,7 +89,17 @@
         <div v-if="store.currentStep === 1">
           <SetupForm :form="store.formData" :scanResult="store.scanResult" />
 
-          <div class="flex justify-end gap-3 mt-8">
+          <!-- Error de validación (ej: sección no seleccionada) -->
+          <div v-if="previewError"
+               class="flex items-center gap-2 px-4 py-3 rounded-xl bg-pastel-pink border border-danger/20 text-xs text-danger-dark mt-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {{ previewError }}
+          </div>
+
+          <div class="flex justify-end gap-3 mt-4">
             <button
               @click="handlePreview"
               :disabled="store.loading.preview"
@@ -99,8 +109,7 @@
             >
               <svg v-if="store.loading.preview" class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -146,8 +155,51 @@
             </div>
           </div>
 
-          <!-- HTML Preview -->
-          <div class="bg-surface-card rounded-2xl border border-border-soft overflow-hidden mb-6">
+          <!-- HTML Preview por bloques -->
+          <div v-if="store.previewBlocks" class="space-y-4 mb-6">
+            <!-- Helper: un card por bloque -->
+            <template v-for="(block, sectionId) in store.previewBlocks" :key="sectionId">
+
+              <!-- Summary -->
+              <PreviewBlock
+                v-if="block.summary"
+                title="HTML de la Sección (General)"
+                icon="📄"
+                bg-class="bg-pastel-blue"
+                :html="block.summary"
+              />
+
+              <!-- Presentaciones -->
+              <PreviewBlock
+                v-if="block.presentations_block"
+                title="Bloque — Presentaciones"
+                icon="📊"
+                bg-class="bg-pastel-purple"
+                :html="block.presentations_block"
+              />
+
+              <!-- Lectura -->
+              <PreviewBlock
+                v-if="block.reading_block"
+                title="Bloque — Lectura"
+                icon="📖"
+                bg-class="bg-pastel-mint"
+                :html="block.reading_block"
+              />
+
+              <!-- Videos -->
+              <PreviewBlock
+                v-if="block.videos_block"
+                title="Bloque — Videos"
+                icon="🎥"
+                bg-class="bg-pastel-pink"
+                :html="block.videos_block"
+              />
+            </template>
+          </div>
+
+          <!-- Fallback: HTML plano (versiones antiguas) -->
+          <div v-else class="bg-surface-card rounded-2xl border border-border-soft overflow-hidden mb-6">
             <div class="px-6 py-3 border-b border-border-soft flex items-center gap-2">
               <div class="flex gap-1.5">
                 <span class="w-3 h-3 rounded-full bg-danger"></span>
@@ -180,8 +232,7 @@
             >
               <svg v-if="store.loading.apply" class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               {{ store.loading.apply ? 'Guardando en Moodle...' : 'Guardar en Moodle' }}
             </button>
@@ -224,7 +275,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, defineComponent, h, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/useCourseStore.js'
 import StepProgress from '../components/StepProgress.vue'
@@ -236,8 +287,31 @@ const store = useCourseStore()
 
 const courseId = ref(Number(route.params.id))
 const applyResult = ref(null)
+const previewError = ref('')
 
 const stepLabels = ['Configurar', 'Previsualizar', 'Completado']
+
+// --- Componente inline para cada card de preview ---
+const PreviewBlock = defineComponent({
+  props: {
+    title: String,
+    icon: String,
+    bgClass: String,
+    html: String,
+  },
+  setup(props) {
+    return () =>
+      h('div', { class: 'bg-surface-card rounded-2xl border border-border-soft overflow-hidden' }, [
+        h('div', { class: 'px-5 py-3 border-b border-border-soft flex items-center gap-2' }, [
+          h('span', { class: 'text-base' }, props.icon),
+          h('span', { class: 'text-sm font-semibold text-text-primary' }, props.title),
+        ]),
+        h('div', { class: 'p-5 max-h-80 overflow-y-auto' }, [
+          h('div', { class: 'prose prose-sm max-w-none', innerHTML: props.html }),
+        ]),
+      ])
+  },
+})
 
 function goBack() {
   store.resetForm()
@@ -250,9 +324,14 @@ function truncate(str, len) {
 }
 
 async function handlePreview() {
-  const result = await store.requestPreview()
-  if (result) {
-    store.setStep(2)
+  previewError.value = ''
+  try {
+    const result = await store.requestPreview()
+    if (result) {
+      store.setStep(2)
+    }
+  } catch (e) {
+    previewError.value = e.message
   }
 }
 

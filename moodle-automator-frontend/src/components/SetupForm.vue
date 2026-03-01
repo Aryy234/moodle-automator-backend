@@ -105,7 +105,6 @@
       </h3>
 
       <div class="space-y-3">
-        <!-- Días -->
         <div>
           <label class="block text-xs font-medium text-text-secondary mb-1.5">Columnas de días (separar por coma)</label>
           <input
@@ -118,15 +117,11 @@
           />
         </div>
 
-        <!-- Entradas del horario -->
         <div v-for="(entry, idx) in scheduleEntries" :key="idx"
              class="p-4 rounded-xl bg-surface border border-border-soft space-y-2">
           <div class="flex items-center justify-between">
             <label class="text-xs font-medium text-text-secondary">Asignatura {{ idx + 1 }}</label>
-            <button
-              @click="removeScheduleEntry(idx)"
-              class="text-danger-dark hover:text-danger-dark/80 transition-colors p-1"
-            >
+            <button @click="removeScheduleEntry(idx)" class="text-danger-dark hover:text-danger-dark/80 transition-colors p-1">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
@@ -182,30 +177,21 @@
              class="p-4 rounded-xl bg-surface border border-border-soft space-y-2">
           <div class="flex items-center justify-between">
             <label class="text-xs font-medium text-text-secondary">Referencia {{ idx + 1 }}</label>
-            <button
-              @click="removeBibliographyEntry(idx)"
-              class="text-danger-dark hover:text-danger-dark/80 transition-colors p-1"
-            >
+            <button @click="removeBibliographyEntry(idx)" class="text-danger-dark hover:text-danger-dark/80 transition-colors p-1">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
               </svg>
             </button>
           </div>
-          <input
-            type="text"
-            v-model="entry.text"
+          <input type="text" v-model="entry.text"
             class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
                    focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-            placeholder="Texto de la referencia bibliográfica"
-          />
-          <input
-            type="url"
-            v-model="entry.url"
+            placeholder="Texto de la referencia bibliográfica" />
+          <input type="url" v-model="entry.url"
             class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
                    focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-            placeholder="https://url-del-recurso.com"
-          />
+            placeholder="https://url-del-recurso.com" />
         </div>
 
         <button
@@ -217,11 +203,326 @@
         </button>
       </div>
     </div>
+
+    <!-- ====================================================== -->
+    <!--  SEMANA 1 — BLOQUES DE CONTENIDO                       -->
+    <!-- ====================================================== -->
+    <div class="bg-surface-card rounded-2xl border border-border-soft overflow-hidden">
+      <!-- Header de la sección -->
+      <div class="px-6 py-4 bg-gradient-to-r from-primary/10 to-accent/5 border-b border-border-soft">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-text-primary">Bloques de Contenido</h3>
+            <p class="text-[11px] text-text-muted">Crea labels independientes en Moodle para cada bloque</p>
+          </div>
+        </div>
+
+        <!-- Selector de sección destino -->
+        <div>
+          <label class="block text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Sección de Moodle donde se crearán los bloques
+            <span class="text-danger-dark font-bold">*</span>
+          </label>
+          <select
+            v-model="selectedSectionId"
+            @change="onSectionChange"
+            class="w-full px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                   focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+          >
+            <option value="" disabled>— Selecciona una sección —</option>
+            <option v-for="sec in store.courseSections" :key="sec.id" :value="sec.id">
+              {{ sec.section === 0 ? '📋 General' : `📅 Semana ${sec.section}` }}
+              {{ sec.name && sec.name !== `Sección ${sec.section}` ? `— ${sec.name}` : '' }}
+            </option>
+          </select>
+          <p v-if="!selectedSectionId" class="text-[11px] text-danger-dark mt-1">
+            Requerido para crear los bloques de Presentaciones, Lectura y Videos.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-6 space-y-8">
+
+        <!-- ========== BLOQUE PRESENTACIONES ========== -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-7 h-7 rounded-lg bg-pastel-blue flex items-center justify-center text-base">📊</span>
+            <div>
+              <h4 class="text-sm font-semibold text-text-primary">Presentaciones</h4>
+              <p class="text-[11px] text-text-muted">Cada presentación genera su propio iframe en Moodle</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div
+              v-for="(pres, idx) in presentations" :key="idx"
+              class="p-4 rounded-xl bg-surface border border-border-soft"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold text-text-secondary">Presentación {{ idx + 1 }}</span>
+                <button @click="removePresentation(idx)"
+                  class="text-xs text-danger-dark hover:text-danger-dark/70 transition-colors flex items-center gap-1 p-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  </svg>
+                  Eliminar
+                </button>
+              </div>
+              <div class="space-y-2">
+                <input type="text" v-model="pres.title"
+                  class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder="Título de la presentación" />
+                <input type="url" v-model="pres.url"
+                  class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder="Link de la presentación (Canva, Slides, etc.)" />
+              </div>
+            </div>
+
+            <button @click="addPresentation"
+              class="w-full py-2.5 rounded-xl border-2 border-dashed border-border-soft text-text-muted text-xs font-medium
+                     hover:border-primary hover:text-primary transition-all duration-200 flex items-center justify-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              Agregar presentación
+            </button>
+          </div>
+
+          <!-- Objetivo de aprendizaje (opcional) -->
+          <div class="mt-3">
+            <label class="block text-xs font-medium text-text-secondary mb-1.5">
+              Objetivo de aprendizaje <span class="text-text-muted font-normal">(opcional)</span>
+            </label>
+            <textarea v-model="form.presentation_objective" rows="2"
+              class="w-full px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                     placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+                     transition-all duration-200 resize-none"
+              placeholder="Objetivo de aprendizaje de esta semana...">
+            </textarea>
+          </div>
+        </div>
+
+        <hr class="border-border-soft" />
+
+        <!-- ========== BLOQUE LECTURA ========== -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-7 h-7 rounded-lg bg-pastel-mint flex items-center justify-center text-base">📖</span>
+            <div>
+              <h4 class="text-sm font-semibold text-text-primary">Lectura</h4>
+              <p class="text-[11px] text-text-muted">Una lectura principal + lecturas sugeridas adicionales</p>
+            </div>
+          </div>
+
+          <!-- Lectura Principal -->
+          <div class="mb-4">
+            <p class="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Lectura Principal</p>
+            <div class="p-4 rounded-xl bg-surface border border-border-soft space-y-2">
+              <input type="text" v-model="mainReading.title"
+                class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                       focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                placeholder="Título del libro" />
+              <input type="text" v-model="mainReading.author"
+                class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                       focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                placeholder="Autor" />
+              <input type="url" v-model="mainReading.url"
+                class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                       focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                placeholder="Link del libro" />
+              <textarea v-model="mainReading.summary" rows="2"
+                class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm resize-none
+                       focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                placeholder="Resumen breve del libro...">
+              </textarea>
+            </div>
+          </div>
+
+          <!-- Lecturas Sugeridas -->
+          <div class="mb-4">
+            <p class="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Lecturas Sugeridas</p>
+            <div class="space-y-3">
+              <div v-for="(book, idx) in suggestedReadings" :key="idx"
+                   class="p-4 rounded-xl bg-surface border border-border-soft">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-xs font-semibold text-text-secondary">Libro sugerido {{ idx + 1 }}</span>
+                  <button @click="removeSuggestedReading(idx)"
+                    class="text-xs text-danger-dark hover:text-danger-dark/70 transition-colors flex items-center gap-1 p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                    </svg>
+                    Eliminar
+                  </button>
+                </div>
+                <div class="space-y-2">
+                  <input type="text" v-model="book.title"
+                    class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                           focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    placeholder="Título del libro sugerido" />
+                  <input type="text" v-model="book.author"
+                    class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                           focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    placeholder="Autor" />
+                  <input type="url" v-model="book.url"
+                    class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                           focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    placeholder="Link del libro sugerido" />
+                </div>
+              </div>
+
+              <button @click="addSuggestedReading"
+                class="w-full py-2.5 rounded-xl border-2 border-dashed border-border-soft text-text-muted text-xs font-medium
+                       hover:border-primary hover:text-primary transition-all duration-200 flex items-center justify-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+                Agregar lectura sugerida
+              </button>
+            </div>
+          </div>
+
+          <!-- Personalización de etiquetas (colapsable) -->
+          <div class="border border-border-soft rounded-xl overflow-hidden">
+            <button @click="showReadingLabels = !showReadingLabels"
+              class="w-full px-4 py-3 flex items-center justify-between text-xs font-medium text-text-secondary
+                     bg-surface hover:bg-surface-alt transition-colors">
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
+                  <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+                </svg>
+                Personalizar etiquetas del bloque
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform"
+                   :class="showReadingLabels ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div v-if="showReadingLabels" class="p-4 bg-surface-card grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-medium text-text-muted mb-1">Texto botón collapse</label>
+                <input type="text" v-model="form.reading_collapse_label"
+                  class="w-full px-3 py-1.5 rounded-lg border border-border-soft bg-surface text-xs
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder='Default: "Lectura"' />
+              </div>
+              <div>
+                <label class="block text-[10px] font-medium text-text-muted mb-1">Título interno (h4)</label>
+                <input type="text" v-model="form.reading_section_title"
+                  class="w-full px-3 py-1.5 rounded-lg border border-border-soft bg-surface text-xs
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder='Default: "Lectura principal"' />
+              </div>
+              <div>
+                <label class="block text-[10px] font-medium text-text-muted mb-1">Texto botón ver lectura</label>
+                <input type="text" v-model="form.reading_button_text"
+                  class="w-full px-3 py-1.5 rounded-lg border border-border-soft bg-surface text-xs
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder='Default: "Ver lectura"' />
+              </div>
+              <div>
+                <label class="block text-[10px] font-medium text-text-muted mb-1">Título lecturas sugeridas</label>
+                <input type="text" v-model="form.reading_suggested_title"
+                  class="w-full px-3 py-1.5 rounded-lg border border-border-soft bg-surface text-xs
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder='Default: "Lecturas sugeridas"' />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="border-border-soft" />
+
+        <!-- ========== BLOQUE VIDEOS ========== -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-7 h-7 rounded-lg bg-pastel-pink flex items-center justify-center text-base">🎥</span>
+            <div>
+              <h4 class="text-sm font-semibold text-text-primary">Videos</h4>
+              <p class="text-[11px] text-text-muted">Cada video genera su propio iframe en Moodle</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div v-for="(vid, idx) in videos" :key="idx"
+                 class="p-4 rounded-xl bg-surface border border-border-soft">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold text-text-secondary">Video {{ idx + 1 }}</span>
+                <button @click="removeVideo(idx)"
+                  class="text-xs text-danger-dark hover:text-danger-dark/70 transition-colors flex items-center gap-1 p-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  </svg>
+                  Eliminar
+                </button>
+              </div>
+              <div class="space-y-2">
+                <input type="text" v-model="vid.title"
+                  class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder="Título del video" />
+                <input type="url" v-model="vid.url"
+                  class="w-full px-3 py-2 rounded-lg border border-border-soft bg-surface-card text-sm
+                         focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  placeholder="Link del video (Drive, YouTube, etc.)" />
+              </div>
+            </div>
+
+            <button @click="addVideo"
+              class="w-full py-2.5 rounded-xl border-2 border-dashed border-border-soft text-text-muted text-xs font-medium
+                     hover:border-primary hover:text-primary transition-all duration-200 flex items-center justify-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              Agregar video
+            </button>
+          </div>
+
+          <!-- Resumen de videos (opcional) -->
+          <div class="mt-3">
+            <label class="block text-xs font-medium text-text-secondary mb-1.5">
+              Texto resumen de videos <span class="text-text-muted font-normal">(opcional)</span>
+            </label>
+            <textarea v-model="form.videos_summary" rows="2"
+              class="w-full px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                     placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+                     transition-all duration-200 resize-none"
+              placeholder="Descripción breve de los videos de esta semana...">
+            </textarea>
+          </div>
+        </div>
+
+      </div><!-- /p-6 -->
+    </div><!-- /card Semana 1 -->
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { useCourseStore } from '../stores/useCourseStore.js'
+
+const store = useCourseStore()
 
 const props = defineProps({
   form: {
@@ -233,6 +534,17 @@ const props = defineProps({
     default: null,
   },
 })
+
+// ========== Selector de sección ==========
+const selectedSectionId = ref('')
+
+function onSectionChange() {
+  const sec = store.courseSections.find((s) => s.id === selectedSectionId.value)
+  if (sec) {
+    props.form.section_id = sec.id
+    props.form.section_number = sec.section
+  }
+}
 
 // ========== Mapeador de labels ==========
 const labels = {
@@ -250,7 +562,6 @@ function placeholderLabel(key) {
 }
 
 function formKey(placeholderKey) {
-  // Convertir placeholder_key a form key: 'video-introductorio' -> 'video_introductorio'
   return placeholderKey.replace(/-/g, '_')
 }
 
@@ -272,7 +583,6 @@ function removeScheduleEntry(idx) {
   scheduleEntries.value.splice(idx, 1)
 }
 
-// Sincronizar con el form
 watch(
   [scheduleEntries, scheduleDays],
   () => {
@@ -310,4 +620,57 @@ watch(
   },
   { deep: true }
 )
+
+// ========== Presentaciones ==========
+const presentations = ref([])
+
+function addPresentation() {
+  presentations.value.push({ title: '', url: '' })
+}
+
+function removePresentation(idx) {
+  presentations.value.splice(idx, 1)
+}
+
+watch(presentations, () => {
+  props.form.presentations = presentations.value.filter((p) => p.title || p.url)
+}, { deep: true })
+
+// ========== Lectura ==========
+const mainReading = reactive({ title: '', author: '', url: '', summary: '' })
+const suggestedReadings = ref([])
+const showReadingLabels = ref(false)
+
+function addSuggestedReading() {
+  suggestedReadings.value.push({ title: '', author: '', url: '' })
+}
+
+function removeSuggestedReading(idx) {
+  suggestedReadings.value.splice(idx, 1)
+}
+
+watch(
+  [() => ({ ...mainReading }), suggestedReadings],
+  () => {
+    const hasMain = mainReading.title || mainReading.author || mainReading.url
+    props.form.main_reading = hasMain ? { ...mainReading } : null
+    props.form.suggested_readings = suggestedReadings.value.filter((b) => b.title || b.url)
+  },
+  { deep: true }
+)
+
+// ========== Videos ==========
+const videos = ref([])
+
+function addVideo() {
+  videos.value.push({ title: '', url: '' })
+}
+
+function removeVideo(idx) {
+  videos.value.splice(idx, 1)
+}
+
+watch(videos, () => {
+  props.form.videos = videos.value.filter((v) => v.title || v.url)
+}, { deep: true })
 </script>

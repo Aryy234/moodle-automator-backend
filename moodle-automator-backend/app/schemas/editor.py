@@ -43,19 +43,16 @@ class BibliographyUpdateRequest(BaseModel):
 
 # ==================== COURSE CUSTOMIZATION (ALL-IN-ONE) ====================
 
-class CourseCustomizationRequest(BaseModel):
+
+# ==================== NUEVO: PERSONALIZACIÓN POR SECCIÓN ====================
+
+class SectionCustomizationData(BaseModel):
     """
-    Schema principal para personalizar todo el contenido de la sección General.
-    
-    Permite actualizar en una sola llamada:
-    - Links/placeholders (video, clases, grabaciones, perfil, silabo, PEA)
-    - Nombre y descripción del curso (en el HTML)
-    - Horario completo
-    - Bibliografía
+    Datos de personalización para UNA sección específica (por ejemplo, una semana).
+    Todos los campos son opcionales y solo se aplican si se envían.
     """
-    course_id: int = Field(..., description="ID del curso a personalizar")
-    
-    # Links / Placeholders
+    section_id: int = Field(..., description="ID de la sección a personalizar")
+    section_number: Optional[int] = Field(None, description="Número de la sección (0=General, 1=Semana 1, etc.)")
     video_introductorio: Optional[str] = Field(None, description="URL del video introductorio (iframe src)")
     unirse_clases: Optional[str] = Field(None, description="URL para unirse a clases")
     url_grabaciones: Optional[str] = Field(None, description="URL de grabaciones")
@@ -63,15 +60,47 @@ class CourseCustomizationRequest(BaseModel):
     silabo: Optional[str] = Field(None, description="URL del sílabo (iframe src)")
     pea: Optional[str] = Field(None, description="URL del PEA (iframe src)")
     bibliografia_url: Optional[str] = Field(None, description="URL de la bibliografía (si es un solo link)")
-    
-    # Contenido de texto
     course_title: Optional[str] = Field(None, description="Nuevo título del curso (reemplaza en <h1>)")
     course_description: Optional[str] = Field(None, description="Nueva descripción del curso (reemplaza en <p>)")
-    
-    # Horario
     schedule: Optional[ScheduleUpdateRequest] = Field(None, description="Datos del horario a actualizar")
+    bibliography: Optional[BibliographyUpdateRequest] = Field(None, description="Datos de bibliografía a actualizar")
+    # Bloques avanzados para presentaciones, lecturas y videos
+    presentations: Optional[List[dict]] = Field(None, description="Lista de presentaciones: [{title, url}]. Soporta múltiples.")
+    presentation_objective: Optional[str] = Field(None, description="Objetivo de aprendizaje de la(s) presentación(es)")
+    main_reading: Optional[dict] = Field(None, description="Lectura principal: {title, author, url, summary}")
+    suggested_readings: Optional[List[dict]] = Field(None, description="Lecturas sugeridas: [{title, author, url}]")
+    videos: Optional[List[dict]] = Field(None, description="Lista de videos: [{title, url}]. Soporta múltiples.")
+    videos_summary: Optional[str] = Field(None, description="Resumen de los videos")
+    # Personalización del bloque de lectura
+    reading_collapse_label: Optional[str] = Field(None, description="Texto del botón collapse del bloque de lectura. Ej: 'Lectura', 'Guia de apoyo'")
+    reading_section_title: Optional[str] = Field(None, description="Título h4 interno del bloque de lectura. Ej: 'Lectura principal', 'Guia para la POO'")
+    reading_button_text: Optional[str] = Field(None, description="Texto del botón de la lectura principal. Ej: 'Ver lectura', 'Ver Guia de apoyo'")
+    reading_suggested_title: Optional[str] = Field(None, description="Título de la sección de lecturas sugeridas. Ej: 'Lecturas sugeridas', 'Libro de apoyo para mejorar el conocimiento'")
+
+
+class CourseCustomizationRequest(BaseModel):
+    """
+    Schema principal para personalizar el contenido de una o varias secciones.
     
-    # Bibliografía
+    - Si se envía 'sections', se personalizan varias secciones (por semana, etc.)
+    - Si se envían los campos planos (legacy), solo se personaliza la sección General (0)
+    """
+    course_id: int = Field(..., description="ID del curso a personalizar")
+    sections: Optional[List[SectionCustomizationData]] = Field(
+        None,
+        description="Lista de personalizaciones por sección. Si se omite, se usa el modo legacy (solo General)."
+    )
+    # Legacy: para compatibilidad con frontend actual (solo General)
+    video_introductorio: Optional[str] = Field(None, description="URL del video introductorio (iframe src)")
+    unirse_clases: Optional[str] = Field(None, description="URL para unirse a clases")
+    url_grabaciones: Optional[str] = Field(None, description="URL de grabaciones")
+    perfil_docente: Optional[str] = Field(None, description="URL del perfil del docente (iframe src)")
+    silabo: Optional[str] = Field(None, description="URL del sílabo (iframe src)")
+    pea: Optional[str] = Field(None, description="URL del PEA (iframe src)")
+    bibliografia_url: Optional[str] = Field(None, description="URL de la bibliografía (si es un solo link)")
+    course_title: Optional[str] = Field(None, description="Nuevo título del curso (reemplaza en <h1>)")
+    course_description: Optional[str] = Field(None, description="Nueva descripción del curso (reemplaza en <p>)")
+    schedule: Optional[ScheduleUpdateRequest] = Field(None, description="Datos del horario a actualizar")
     bibliography: Optional[BibliographyUpdateRequest] = Field(None, description="Datos de bibliografía a actualizar")
 
 

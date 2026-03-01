@@ -169,19 +169,40 @@
               </div>
             </div>
 
-            <!-- Curso origen -->
+            <!-- Buscador de curso origen -->
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5">Curso Origen</label>
-              <select
-                v-model="store.duplicateForm.source_course_id"
-                class="w-full px-4 py-2.5 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
-                       focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-              >
-                <option :value="null" disabled>Seleccionar curso...</option>
-                <option v-for="c in store.courses" :key="c.id" :value="c.id">
-                  {{ c.fullname }} (ID: {{ c.id }})
-                </option>
-              </select>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">Buscar curso origen</label>
+              <div class="relative mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
+                     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Buscar curso por nombre o ID..."
+                  class="w-full pl-11 pr-4 py-3 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                         placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+                         transition-all duration-200"
+                />
+              </div>
+              <div class="max-h-60 overflow-y-auto rounded-xl border border-border-soft bg-surface-alt">
+                <ul>
+                  <li v-for="c in filteredCourses" :key="c.id">
+                    <button
+                      @click="store.duplicateForm.source_course_id = c.id"
+                      :class="store.duplicateForm.source_course_id === c.id
+                        ? 'bg-primary text-white' : 'bg-transparent text-text-primary hover:bg-primary/10'"
+                      class="w-full text-left px-4 py-2 transition-all rounded-xl"
+                    >
+                      {{ c.fullname }} <span class="text-xs text-text-muted">(ID: {{ c.id }})</span>
+                    </button>
+                  </li>
+                  <li v-if="filteredCourses.length === 0" class="px-4 py-2 text-text-muted text-xs">
+                    No se encontraron cursos
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <!-- Nombre completo -->

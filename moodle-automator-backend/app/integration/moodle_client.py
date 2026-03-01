@@ -269,7 +269,60 @@ class MoodleClient:
             raise
 
     # ==================== LABEL OPERATIONS ====================
-    
+
+    async def create_label_in_section(
+        self,
+        course_id: int,
+        section_id: int,
+        content: str,
+        name: str = "",
+    ) -> dict:
+        """
+        Crea un nuevo módulo label (Text and media area) dentro de una sección.
+
+        Llama a la función del plugin personalizado:
+        local_sectionedit_add_label_to_section
+
+        Args:
+            course_id:  ID del curso
+            section_id: ID de la sección (mdl_course_sections.id)
+            content:    HTML del label
+            name:       Nombre interno del label (opcional)
+
+        Returns:
+            Dict con 'status', 'cmid' y 'message'
+        """
+        params = {
+            "courseid":  course_id,
+            "sectionid": section_id,
+            "content":   content,
+            "name":      name,
+        }
+
+        try:
+            result = await self._call_api(
+                "local_sectionedit_add_label_to_section", params
+            )
+            print(
+                f"✅ Label creado en sección {section_id} "
+                f"(cmid={result.get('cmid')}, nombre='{name}')"
+            )
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudo crear el label: falta la función "
+                        "local_sectionedit_add_label_to_section en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit y agrega la función desde: "
+                        "Administración del sitio → Servidor → Servicios externos → "
+                        "[tu servicio] → Funciones → Agregar."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
     async def update_label(self, instance_id: int, new_content: str) -> None:
         """
         Actualiza el contenido (intro) de un label en Moodle.

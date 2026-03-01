@@ -60,9 +60,10 @@ async def scan_course_placeholders(
 @router.post(
     "/customize",
     response_model=CourseCustomizationResponse,
-    summary="Personalizar curso completo",
-    description="Aplica todas las personalizaciones al HTML de la sección General: "
-                "links, título, descripción, horario y bibliografía.",
+    summary="Personalizar curso (soporta varias secciones)",
+    description="Aplica personalizaciones al HTML de una o varias secciones del curso. "
+                "Si se envía 'sections', personaliza cada sección indicada (por semana, etc). "
+                "Si no, solo la sección General (modo legacy).",
 )
 async def customize_course(
     request: CourseCustomizationRequest,
@@ -88,8 +89,9 @@ async def customize_course(
 @router.post(
     "/preview",
     response_model=CourseCustomizationResponse,
-    summary="Preview de personalización",
-    description="Muestra cómo quedaría el HTML sin guardar cambios en Moodle.",
+    summary="Preview de personalización (soporta varias secciones)",
+    description="Muestra cómo quedarían los HTML de una o varias secciones sin guardar cambios en Moodle. "
+                "Si se envía 'sections', retorna un dict con el HTML de cada sección.",
 )
 async def preview_customization(
     request: CourseCustomizationRequest,

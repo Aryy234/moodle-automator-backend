@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import {
   checkHealth,
   getCourses,
+  getCourseContents,
   scanCourse,
   previewChanges,
   applyChanges,
@@ -15,8 +16,10 @@ export const useCourseStore = defineStore('course', () => {
   const siteInfo = ref(null)
   const courses = ref([])
   const selectedCourse = ref(null)
+  const courseSections = ref([]) // secciones del curso con sus IDs
   const scanResult = ref(null)
   const previewResult = ref(null)
+  const previewBlocks = ref(null) // parsed JSON from processed_html
 
   const loading = ref({
     health: false,
@@ -39,6 +42,7 @@ export const useCourseStore = defineStore('course', () => {
   // Formulario de personalización
   const formData = ref({
     course_id: null,
+    // Placeholders (sección General)
     video_introductorio: null,
     unirse_clases: null,
     url_grabaciones: null,
@@ -50,6 +54,22 @@ export const useCourseStore = defineStore('course', () => {
     course_description: null,
     schedule: null,
     bibliography: null,
+    // Sección destino para los bloques de contenido
+    section_id: null,
+    section_number: null,
+    // Semana 1 — Bloque Presentaciones
+    presentations: [],
+    presentation_objective: null,
+    // Semana 1 — Bloque Lectura
+    main_reading: null,
+    suggested_readings: [],
+    reading_collapse_label: null,
+    reading_section_title: null,
+    reading_button_text: null,
+    reading_suggested_title: null,
+    // Semana 1 — Bloque Videos
+    videos: [],
+    videos_summary: null,
   })
 
   // Formulario de duplicación
@@ -107,6 +127,8 @@ export const useCourseStore = defineStore('course', () => {
     duplicateForm.value.source_course_id = course.id
     scanResult.value = null
     previewResult.value = null
+    previewBlocks.value = null
+    courseSections.value = []
   }
 
   async function scanSelectedCourse(courseId = null) {
@@ -115,16 +137,26 @@ export const useCourseStore = defineStore('course', () => {
     loading.value.scan = true
     errors.value.scan = null
     try {
-      const { data } = await scanCourse(id)
-      scanResult.value = data
+      // Scan placeholders + obtener secciones en paralelo
+      const [scanData, contentsData] = await Promise.all([
+        scanCourse(id).then((r) => r.data),
+        getCourseContents(id).then((r) => r.data).catch(() => null),
+      ])
+
+      scanResult.value = scanData
       formData.value.course_id = id
 
       // Pre-llenar título y descripción si existen
-      if (data.course_title) {
-        formData.value.course_title = data.course_title
-      }
-      if (data.course_description) {
-        formData.value.course_description = data.course_description
+      if (scanData.course_title) formData.value.course_title = scanData.course_title
+      if (scanData.course_description) formData.value.course_description = scanData.course_description
+
+      // Guardar secciones con id y nombre para el selector
+      if (contentsData?.sections) {
+        courseSections.value = contentsData.sections.map((s) => ({
+          id: s.id,
+          section: s.section,
+          name: s.name || `Sección ${s.section}`,
+        }))
       }
     } catch (err) {
       errors.value.scan = err.response?.data?.detail || 'Error al escanear el curso'
@@ -140,6 +172,16 @@ export const useCourseStore = defineStore('course', () => {
       const payload = buildPayload()
       const { data } = await previewChanges(payload)
       previewResult.value = data
+
+      // Parsear el JSON de processed_html
+      if (data.processed_html) {
+        try {
+          previewBlocks.value = JSON.parse(data.processed_html)
+        } catch (_) {
+          // Si no es JSON (versiones anteriores), guardarlo como HTML plano
+          previewBlocks.value = null
+        }
+      }
       return data
     } catch (err) {
       errors.value.preview = err.response?.data?.detail || 'Error en la previsualización'
@@ -176,19 +218,69 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   function buildPayload() {
-    const payload = { course_id: formData.value.course_id }
-    // Solo incluir campos con valor
-    const fields = [
+    const fd = formData.value
+
+    // Separar campos de la sección General (placeholders + title/desc/schedule/bibliography)
+    // de los bloques de contenido (presentations/reading/videos)
+    const hasContentBlocks = (
+      fd.presentations?.length > 0 ||
+      fd.main_reading ||
+      fd.suggested_readings?.length > 0 ||
+      fd.videos?.length > 0
+    )
+
+    // Si no hay bloques de contenido, usar modo legacy (compatible con versión anterior)
+    if (!hasContentBlocks) {
+      const payload = { course_id: fd.course_id }
+      const legacyFields = [
+        'video_introductorio', 'unirse_clases', 'url_grabaciones',
+        'perfil_docente', 'silabo', 'pea', 'bibliografia_url',
+        'course_title', 'course_description',
+      ]
+      legacyFields.forEach((key) => {
+        if (fd[key] !== null && fd[key] !== '') payload[key] = fd[key]
+      })
+      if (fd.schedule) payload.schedule = fd.schedule
+      if (fd.bibliography) payload.bibliography = fd.bibliography
+      return payload
+    }
+
+    // Modo sections: requiere section_id real
+    const sectionId = fd.section_id
+    if (!sectionId) {
+      // Si aún no eligió sección, lanzar error descriptivo
+      throw new Error('Debes seleccionar en qué sección de Moodle crear los bloques de contenido.')
+    }
+
+    const section = {
+      section_id: sectionId,
+      section_number: fd.section_number ?? 1,
+    }
+
+    // Escalares
+    const scalarFields = [
       'video_introductorio', 'unirse_clases', 'url_grabaciones',
       'perfil_docente', 'silabo', 'pea', 'bibliografia_url',
-      'course_title', 'course_description', 'schedule', 'bibliography',
+      'course_title', 'course_description',
+      'presentation_objective', 'videos_summary',
+      'reading_collapse_label', 'reading_section_title',
+      'reading_button_text', 'reading_suggested_title',
     ]
-    fields.forEach((key) => {
-      if (formData.value[key] !== null && formData.value[key] !== '') {
-        payload[key] = formData.value[key]
-      }
+    scalarFields.forEach((key) => {
+      if (fd[key] !== null && fd[key] !== '') section[key] = fd[key]
     })
-    return payload
+
+    if (fd.schedule) section.schedule = fd.schedule
+    if (fd.bibliography) section.bibliography = fd.bibliography
+    if (fd.main_reading) section.main_reading = fd.main_reading
+    if (fd.presentations?.length > 0) section.presentations = fd.presentations
+    if (fd.suggested_readings?.length > 0) section.suggested_readings = fd.suggested_readings
+    if (fd.videos?.length > 0) section.videos = fd.videos
+
+    return {
+      course_id: fd.course_id,
+      sections: [section],
+    }
   }
 
   function resetForm() {
@@ -205,9 +297,22 @@ export const useCourseStore = defineStore('course', () => {
       course_description: null,
       schedule: null,
       bibliography: null,
+      section_id: null,
+      section_number: null,
+      presentations: [],
+      presentation_objective: null,
+      main_reading: null,
+      suggested_readings: [],
+      reading_collapse_label: null,
+      reading_section_title: null,
+      reading_button_text: null,
+      reading_suggested_title: null,
+      videos: [],
+      videos_summary: null,
     }
     scanResult.value = null
     previewResult.value = null
+    previewBlocks.value = null
     currentStep.value = 1
   }
 
@@ -217,8 +322,8 @@ export const useCourseStore = defineStore('course', () => {
 
   return {
     // State
-    connectionStatus, siteInfo, courses, selectedCourse,
-    scanResult, previewResult, loading, errors,
+    connectionStatus, siteInfo, courses, selectedCourse, courseSections,
+    scanResult, previewResult, previewBlocks, loading, errors,
     formData, duplicateForm, currentStep,
     // Getters
     isConnected, isLoading, hasPlaceholders, hasSchedule, hasBibliography,
