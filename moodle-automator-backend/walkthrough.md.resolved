@@ -1,0 +1,52 @@
+# Sistema de Cuestionarios — Walkthrough
+
+## Resumen
+
+Se implementó el sistema de importación de cuestionarios siguiendo la arquitectura existente del proyecto (sin base de datos, Moodle como fuente de verdad).
+
+## Archivos creados
+
+| Archivo | Descripción |
+|---------|-------------|
+| [quiz.py](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/schemas/quiz.py) | Schemas Pydantic: [ParsedQuestion](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/schemas/quiz.py#40-50), [QuizActivity](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/schemas/quiz.py#54-64), [QuestionCategory](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/schemas/quiz.py#75-82), [QuizImportResponse](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/schemas/quiz.py#107-122), etc. |
+| [quiz_service.py](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/services/quiz_service.py) | Parsers Aiken + XML, generador Moodle XML, orquestación de importación |
+| [quizzes.py](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/api/v1/quizzes.py) | Router con 6 endpoints bajo `/api/v1/quizzes/` |
+
+## Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| [moodle_client.py](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/integration/moodle_client.py) | +4 métodos: [get_quizzes_by_course](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/integration/moodle_client.py#439-454), [get_question_categories](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/services/quiz_service.py#336-339), [create_question_category](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/integration/moodle_client.py#497-532), [import_questions_xml](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/integration/moodle_client.py#533-580) |
+| [__init__.py](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/api/v1/__init__.py) | Registrado router [quizzes](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/app/integration/moodle_client.py#439-454) con prefix `/quizzes` |
+| [requirements.txt](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/requirements.txt) | Agregado `python-multipart>=0.0.9` |
+| [sistema_cuestionarios.md](file:///home/aryy/Documentos/Proyectos/moodle-automator-backend/moodle-automator-backend/sistema_cuestionarios.md) | Reescrito completamente con el nuevo diseño |
+
+## Endpoints implementados
+
+```
+GET  /api/v1/quizzes/{course_id}/activities    → Listar cuestionarios del curso
+GET  /api/v1/quizzes/{course_id}/categories    → Listar categorías de preguntas
+POST /api/v1/quizzes/{course_id}/categories    → Crear categoría
+POST /api/v1/quizzes/preview-import            → Preview (parsea sin enviar)
+POST /api/v1/quizzes/import                    → Importar a Moodle
+GET  /api/v1/quizzes/supported-formats         → Formatos soportados
+```
+
+## Verificación
+
+| Test | Resultado |
+|------|-----------|
+| App imports | ✅ OK (6 rutas cargadas) |
+| Parser Aiken | ✅ 2/2 preguntas parseadas correctamente |
+| Parser XML | ✅ 2/2 preguntas (multichoice + truefalse) |
+| OpenAPI schema | ✅ 6 endpoints registrados |
+
+## Próximo paso
+
+Reiniciar el servidor para cargar los cambios:
+```bash
+# Ctrl+C en la terminal del servidor, luego:
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Luego probar en Swagger UI: `http://localhost:8000/docs` → sección **Quizzes**.

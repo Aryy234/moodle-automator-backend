@@ -8,3 +8,4 @@
 $string['pluginname'] = 'Section Edit (Web Service)';
 $string['privacy:metadata'] = 'The local_sectionedit plugin does not store any personal data.';
 $string['sectionedit:updatesummary'] = 'Update course section summaries via web service';
+$string['sectionedit:managequestions'] = 'Manage question categories and import questions via web service';

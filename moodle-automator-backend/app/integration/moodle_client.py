@@ -434,6 +434,277 @@ class MoodleClient:
             "funciones de Web Service adicionales o un plugin personalizado"
         )
     
+    # ==================== QUIZ OPERATIONS ====================
+
+    async def get_quizzes_by_course(self, course_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene las actividades cuestionario (quiz) de un curso.
+
+        Args:
+            course_id: ID del curso
+
+        Returns:
+            Lista de quizzes con sus datos
+        """
+        result = await self._call_api(
+            "mod_quiz_get_quizzes_by_courses",
+            {f"courseids[0]": course_id}
+        )
+        return result.get("quizzes", [])
+
+    async def get_question_categories(
+        self,
+        course_id: int,
+        cmid: int = 0,
+        include_all: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Obtiene las categorías de preguntas de un curso.
+
+        Usa local_sectionedit_get_question_categories (plugin personalizado).
+
+        Args:
+            course_id: ID del curso
+            cmid: Course Module ID de un quiz específico (0 = contexto del curso)
+            include_all: Si True, retorna categorías de TODOS los contextos
+                         (curso + todas las actividades quiz)
+
+        Returns:
+            Lista de categorías de preguntas
+        """
+        try:
+            params: Dict[str, Any] = {"courseid": course_id}
+            if cmid > 0:
+                params["cmid"] = cmid
+            if include_all:
+                params["includeall"] = 1
+
+            result = await self._call_api(
+                "local_sectionedit_get_question_categories",
+                params
+            )
+            return result.get("categories", []) if isinstance(result, dict) else result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudieron obtener las categorías de preguntas: falta la función "
+                        "local_sectionedit_get_question_categories en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit a v1.2+ y agrega la función desde: "
+                        "Administración del sitio → Servidor → Servicios externos → "
+                        "[tu servicio] → Funciones → Agregar."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
+    async def create_question_category(
+        self,
+        course_id: int,
+        name: str,
+        info: str = "",
+        cmid: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Crea una nueva categoría de preguntas.
+
+        Usa local_sectionedit_create_question_category (plugin personalizado).
+
+        Args:
+            course_id: ID del curso
+            name: Nombre de la categoría
+            info: Descripción de la categoría
+            cmid: Course Module ID del quiz (0 = contexto del curso)
+
+        Returns:
+            Datos de la categoría creada (incluyendo ID)
+        """
+        try:
+            params: Dict[str, Any] = {
+                "courseid": course_id,
+                "name": name,
+                "info": info,
+            }
+            if cmid > 0:
+                params["cmid"] = cmid
+
+            result = await self._call_api(
+                "local_sectionedit_create_question_category",
+                params
+            )
+            print(f"✅ Categoría '{name}' creada (id={result.get('id')})")
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudo crear la categoría de preguntas: falta la función "
+                        "local_sectionedit_create_question_category en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit a v1.2+ y agrega la función."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
+    async def import_questions_xml(
+        self,
+        course_id: int,
+        category_id: int,
+        xml_content: str,
+    ) -> Dict[str, Any]:
+        """
+        Importa preguntas al banco de preguntas de Moodle usando formato XML.
+
+        Usa local_sectionedit_import_questions (plugin personalizado) que internamente
+        invoca las clases qformat_xml / qformat_aiken de Moodle.
+        Reemplaza a qbank_importquestions_import_questions que no existe como WS.
+
+        Args:
+            course_id: ID del curso
+            category_id: ID de la categoría destino
+            xml_content: Contenido XML con las preguntas (formato Moodle XML)
+
+        Returns:
+            Resultado de la importación
+        """
+        import base64
+
+        # La función del plugin espera el archivo como base64
+        file_content_b64 = base64.b64encode(xml_content.encode("utf-8")).decode("utf-8")
+
+        try:
+            result = await self._call_api(
+                "local_sectionedit_import_questions",
+                {
+                    "courseid": course_id,
+                    "categoryid": category_id,
+                    "format": "xml",
+                    "filecontent": file_content_b64,
+                }
+            )
+            print(
+                f"✅ Importación exitosa: {result.get('total_imported', '?')} "
+                f"preguntas al curso {course_id}"
+            )
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudo importar las preguntas: falta la función "
+                        "local_sectionedit_import_questions en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit a v1.2+ y agrega la función."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
+    async def configure_quiz_questions(
+        self,
+        course_id: int,
+        cmid: int,
+        category_id: int,
+        mode: str = "all",
+        num_questions: int = 10,
+        include_subcategories: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Agrega preguntas de una categoría a un cuestionario.
+
+        Usa local_sectionedit_configure_quiz_questions (plugin personalizado).
+
+        Args:
+            course_id: ID del curso
+            cmid: Course Module ID del quiz
+            category_id: ID de la categoría de preguntas
+            mode: 'all' (todas) o 'random' (aleatorias)
+            num_questions: Cantidad de preguntas aleatorias (solo para mode='random')
+            include_subcategories: Incluir subcategorías (solo para mode='random')
+
+        Returns:
+            Resultado de la operación
+        """
+        try:
+            params: Dict[str, Any] = {
+                "courseid": course_id,
+                "cmid": cmid,
+                "categoryid": category_id,
+                "mode": mode,
+                "numquestions": num_questions,
+                "includesubcategories": 1 if include_subcategories else 0,
+            }
+
+            result = await self._call_api(
+                "local_sectionedit_configure_quiz_questions",
+                params,
+            )
+            print(
+                f"✅ Quiz configurado: {result.get('questions_added', 0)} preguntas "
+                f"agregadas al quiz (cmid={cmid}, modo={mode})"
+            )
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudieron agregar preguntas al quiz: falta la función "
+                        "local_sectionedit_configure_quiz_questions en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit a v1.2.4+ y agrega la función."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
+    async def update_quiz_settings(
+        self,
+        course_id: int,
+        cmid: int,
+        time_limit: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Actualiza los ajustes de un cuestionario (tiempo límite, etc.).
+
+        Usa local_sectionedit_update_quiz_settings (plugin personalizado).
+
+        Args:
+            course_id: ID del curso
+            cmid: Course Module ID del quiz
+            time_limit: Tiempo límite en segundos (0 = sin límite)
+
+        Returns:
+            Resultado de la operación
+        """
+        try:
+            result = await self._call_api(
+                "local_sectionedit_update_quiz_settings",
+                {
+                    "courseid": course_id,
+                    "cmid": cmid,
+                    "timelimit": time_limit,
+                },
+            )
+            print(
+                f"✅ Quiz settings actualizados (cmid={cmid}, "
+                f"timelimit={result.get('timelimit_display', time_limit)})"
+            )
+            return result
+        except MoodleAPIError as e:
+            if "accessexception" in str(e.error_code or "").lower():
+                raise MoodleAPIError(
+                    message=(
+                        "No se pudieron actualizar los ajustes del quiz: falta la función "
+                        "local_sectionedit_update_quiz_settings en tu servicio web de Moodle. "
+                        "Actualiza el plugin local_sectionedit a v1.2.4+ y agrega la función."
+                    ),
+                    error_code=e.error_code,
+                    debug_info=e.debug_info,
+                )
+            raise
+
     # ==================== USER OPERATIONS ====================
     
     async def get_site_info(self) -> Dict[str, Any]:

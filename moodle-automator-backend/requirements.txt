@@ -15,3 +15,7 @@ python-dotenv>=1.0.0
 # Validation (included with FastAPI but explicit)
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+
+# File uploads (required for UploadFile in FastAPI)
+python-multipart>=0.0.9
+

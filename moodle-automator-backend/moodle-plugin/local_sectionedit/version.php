@@ -10,7 +10,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_sectionedit';
-$plugin->version   = 2025061401;   // YYYYMMDDXX  — v1.1: add_label_to_section
+$plugin->version   = 2026030206;   // YYYYMMDDXX  — v1.2.6: fix filtercondition format for add_random_questions
 $plugin->requires  = 2024100700;   // Moodle 4.5+
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.1.0';
+$plugin->release   = '1.2.6';
