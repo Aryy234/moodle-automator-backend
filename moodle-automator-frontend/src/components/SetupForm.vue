@@ -541,12 +541,18 @@
       </div><!-- /p-6 -->
     </div><!-- /card Semana 1 -->
 
+    <!-- ====================================================== -->
+    <!--  CUESTIONARIOS — IMPORTAR QUIZ                         -->
+    <!-- ====================================================== -->
+    <QuizImporter :courseId="form.course_id" />
+
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { useCourseStore } from '../stores/useCourseStore.js'
+import QuizImporter from './QuizImporter.vue'
 
 const store = useCourseStore()
 

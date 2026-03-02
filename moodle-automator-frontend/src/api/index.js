@@ -31,4 +31,30 @@ export const previewChanges = (data) => api.post('/editor/preview', data)
 
 export const applyChanges = (data) => api.post('/editor/customize', data)
 
+// ========== Quizzes ==========
+export const getQuizActivities = (courseId) =>
+  api.get(`/quizzes/${courseId}/activities`)
+
+export const getQuizCategories = (courseId, params = {}) =>
+  api.get(`/quizzes/${courseId}/categories`, { params })
+
+export const createQuizCategory = (courseId, data) =>
+  api.post(`/quizzes/${courseId}/categories`, data)
+
+export const previewImport = (formData) =>
+  api.post('/quizzes/preview-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+export const importQuestions = (formData) =>
+  api.post('/quizzes/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+export const configureQuizQuestions = (courseId, data) =>
+  api.post(`/quizzes/${courseId}/configure-questions`, data)
+
+export const configureQuizSettings = (courseId, data) =>
+  api.post(`/quizzes/${courseId}/settings`, data)
+
 export default api
