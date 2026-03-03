@@ -318,25 +318,61 @@
             Sección de Moodle donde se crearán los bloques
             <span class="text-danger-dark font-bold">*</span>
           </label>
-          <select
-            v-model="selectedSectionId"
-            @change="onSectionChange"
-            class="w-full px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
-                   focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-          >
-            <option value="" disabled>— Selecciona una sección —</option>
-            <option v-for="sec in store.courseSections" :key="sec.id" :value="sec.id">
-              {{ sec.section === 0 ? '📋 General' : `📅 Semana ${sec.section}` }}
-              {{ sec.name && sec.name !== `Sección ${sec.section}` ? `— ${sec.name}` : '' }}
-            </option>
-          </select>
+          <div class="flex gap-2">
+            <select
+              v-model="selectedSectionId"
+              @change="onSectionChange"
+              class="flex-1 px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                     focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+            >
+              <option value="" disabled>— Selecciona una sección —</option>
+              <option v-for="sec in store.courseSections" :key="sec.id" :value="sec.id">
+                {{ sec.section === 0 ? '📋 General' : `📅 Semana ${sec.section}` }}
+                {{ sec.name && sec.name !== `Sección ${sec.section}` ? `— ${sec.name}` : '' }}
+              </option>
+            </select>
+            <button
+              @click="applySection"
+              :disabled="!selectedSectionId || sectionApplied"
+              class="px-4 py-2 rounded-xl bg-accent text-white text-sm font-semibold
+                     hover:bg-accent/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                     flex items-center gap-1.5 shrink-0"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              Aplicar
+            </button>
+          </div>
           <p v-if="!selectedSectionId" class="text-[11px] text-danger-dark mt-1">
             Requerido para crear los bloques de Presentaciones, Lectura y Videos.
+          </p>
+          <p v-else-if="sectionApplied" class="text-[11px] text-success-dark mt-1 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Sección aplicada — editando bloques de esta sección
+          </p>
+          <p v-else class="text-[11px] text-text-muted mt-1">
+            Selecciona una sección y haz clic en <strong>Aplicar</strong> para cargar sus bloques.
           </p>
         </div>
       </div>
 
-      <div class="p-6 space-y-8">
+      <!-- Mensaje cuando no hay sección aplicada -->
+      <div v-if="!sectionApplied && selectedSectionId" class="px-6 py-8 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-accent" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+          </svg>
+        </div>
+        <p class="text-sm text-text-muted">Haz clic en <strong class="text-accent">Aplicar</strong> para cargar y editar los bloques de esta sección.</p>
+      </div>
+
+      <div v-if="sectionApplied" class="p-6 space-y-8">
 
         <!-- ========== BLOQUE PRESENTACIONES ========== -->
         <div>
@@ -601,7 +637,7 @@
     </div><!-- /card Semana 1 -->
 
     <!-- ========== BOTÓN GUARDAR BLOQUES DE CONTENIDO ========== -->
-    <div class="flex flex-col items-end gap-2">
+    <div v-if="sectionApplied" class="flex flex-col items-end gap-2">
       <button
         @click="handleSaveBlocks"
         :disabled="savingBlocks || !selectedSectionId"
@@ -673,6 +709,7 @@ const props = defineProps({
 
 // ========== Selector de sección ==========
 const selectedSectionId = ref(props.form.section_id || '')
+const sectionApplied = ref(!!props.form.section_id)
 
 // ========== Estado de guardado por partes ==========
 const savingGeneral = ref(false)
@@ -720,11 +757,38 @@ async function handleSaveBlocks() {
 }
 
 function onSectionChange() {
-  const sec = store.courseSections.find((s) => s.id === selectedSectionId.value)
-  if (sec) {
-    props.form.section_id = sec.id
-    props.form.section_number = sec.section
-  }
+  // Al cambiar de sección, desactivar la aplicación hasta que el usuario haga clic en "Aplicar"
+  sectionApplied.value = false
+  blocksSaveOk.value = ''
+  blocksSaveErr.value = ''
+}
+
+function applySection() {
+  if (!selectedSectionId.value) return
+  store.loadBlocksForSection(selectedSectionId.value)
+  reloadLocalBlockRefs()
+  sectionApplied.value = true
+}
+
+function reloadLocalBlockRefs() {
+  // Re-sincronizar refs locales desde formData actualizado por el store
+  presentations.value = props.form.presentations?.length > 0
+    ? props.form.presentations.map((p) => ({ title: p.title || '', url: p.url || '' }))
+    : []
+
+  const mr = props.form.main_reading
+  mainReading.title = mr?.title || ''
+  mainReading.author = mr?.author || ''
+  mainReading.url = mr?.url || ''
+  mainReading.summary = mr?.summary || ''
+
+  suggestedReadings.value = props.form.suggested_readings?.length > 0
+    ? props.form.suggested_readings.map((r) => ({ title: r.title || '', author: r.author || '', url: r.url || '' }))
+    : []
+
+  videos.value = props.form.videos?.length > 0
+    ? props.form.videos.map((v) => ({ title: v.title || '', url: v.url || '' }))
+    : []
 }
 
 // ========== Helpers ==========

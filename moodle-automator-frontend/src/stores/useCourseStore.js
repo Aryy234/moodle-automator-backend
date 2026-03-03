@@ -26,6 +26,10 @@ export const useCourseStore = defineStore('course', () => {
   const existingBlocksMeta = ref({})
   // Ej: { presentations: { label_cmid: 4521, label_instance_id: 891 }, reading: {...}, videos: {...} }
 
+  // Bloques existentes agrupados por section_id (para soporte multi-sección)
+  const existingBlocksBySection = ref({})
+  // Ej: { 1234: [{ block_type: 'presentations', ... }], 5678: [...] }
+
   const loading = ref({
     health: false,
     courses: false,
@@ -184,43 +188,31 @@ export const useCourseStore = defineStore('course', () => {
         })
       }
 
-      // Pre-llenar bloques avanzados existentes (presentaciones, lectura, videos)
-      existingBlocksMeta.value = {} // Reset metadata
+      // Agrupar bloques existentes por section_id (soporte multi-sección)
+      existingBlocksMeta.value = {}
+      existingBlocksBySection.value = {}
       if (scanData.existing_blocks?.length > 0) {
+        // Agrupar por section_id
         scanData.existing_blocks.forEach((block) => {
-          // Pre-llenar sección destino desde el primer bloque detectado
+          const sid = block.section_id
+          if (sid) {
+            if (!existingBlocksBySection.value[sid]) existingBlocksBySection.value[sid] = []
+            existingBlocksBySection.value[sid].push(block)
+          }
+        })
+
+        // Pre-llenar sección destino desde el primer bloque detectado
+        scanData.existing_blocks.forEach((block) => {
           if (block.section_id && !formData.value.section_id) {
             formData.value.section_id = block.section_id
             formData.value.section_number = block.section_number ?? 1
           }
-
-          // Guardar metadata del label para update (evita duplicar bloques)
-          if (block.label_cmid || block.label_instance_id) {
-            existingBlocksMeta.value[block.block_type] = {
-              label_cmid: block.label_cmid,
-              label_instance_id: block.label_instance_id,
-            }
-          }
-
-          switch (block.block_type) {
-            case 'presentations':
-              if (block.presentations?.length > 0) formData.value.presentations = block.presentations
-              if (block.presentation_objective) formData.value.presentation_objective = block.presentation_objective
-              break
-            case 'reading':
-              if (block.main_reading) formData.value.main_reading = block.main_reading
-              if (block.suggested_readings?.length > 0) formData.value.suggested_readings = block.suggested_readings
-              if (block.collapse_label) formData.value.reading_collapse_label = block.collapse_label
-              if (block.reading_section_title) formData.value.reading_section_title = block.reading_section_title
-              if (block.reading_button_text) formData.value.reading_button_text = block.reading_button_text
-              if (block.reading_suggested_title) formData.value.reading_suggested_title = block.reading_suggested_title
-              break
-            case 'videos':
-              if (block.videos?.length > 0) formData.value.videos = block.videos
-              if (block.videos_summary) formData.value.videos_summary = block.videos_summary
-              break
-          }
         })
+
+        // Pre-llenar bloques de la sección detectada inicialmente
+        if (formData.value.section_id) {
+          _loadBlocksIntoForm(formData.value.section_id)
+        }
       }
 
       // Pre-llenar horario existente
@@ -498,6 +490,62 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   /**
+   * Carga los bloques de una sección específica en formData.
+   * Uso interno y público (cuando el usuario cambia de sección y da "Aplicar").
+   */
+  function _loadBlocksIntoForm(sectionId) {
+    const fd = formData.value
+    // Limpiar campos de bloques actuales
+    fd.presentations = []
+    fd.presentation_objective = null
+    fd.main_reading = null
+    fd.suggested_readings = []
+    fd.reading_collapse_label = null
+    fd.reading_section_title = null
+    fd.reading_button_text = null
+    fd.reading_suggested_title = null
+    fd.videos = []
+    fd.videos_summary = null
+    existingBlocksMeta.value = {}
+
+    const blocks = existingBlocksBySection.value[sectionId] || []
+    blocks.forEach((block) => {
+      if (block.label_cmid || block.label_instance_id) {
+        existingBlocksMeta.value[block.block_type] = {
+          label_cmid: block.label_cmid,
+          label_instance_id: block.label_instance_id,
+        }
+      }
+      switch (block.block_type) {
+        case 'presentations':
+          if (block.presentations?.length > 0) fd.presentations = block.presentations
+          if (block.presentation_objective) fd.presentation_objective = block.presentation_objective
+          break
+        case 'reading':
+          if (block.main_reading) fd.main_reading = block.main_reading
+          if (block.suggested_readings?.length > 0) fd.suggested_readings = block.suggested_readings
+          if (block.collapse_label) fd.reading_collapse_label = block.collapse_label
+          if (block.reading_section_title) fd.reading_section_title = block.reading_section_title
+          if (block.reading_button_text) fd.reading_button_text = block.reading_button_text
+          if (block.reading_suggested_title) fd.reading_suggested_title = block.reading_suggested_title
+          break
+        case 'videos':
+          if (block.videos?.length > 0) fd.videos = block.videos
+          if (block.videos_summary) fd.videos_summary = block.videos_summary
+          break
+      }
+    })
+  }
+
+  function loadBlocksForSection(sectionId) {
+    const fd = formData.value
+    fd.section_id = sectionId
+    const sec = courseSections.value.find((s) => s.id === sectionId)
+    fd.section_number = sec?.section ?? 1
+    _loadBlocksIntoForm(sectionId)
+  }
+
+  /**
    * Adjunta label_cmid y label_instance_id al section payload
    * para que el backend actualice bloques existentes en vez de crear nuevos.
    */
@@ -548,6 +596,7 @@ export const useCourseStore = defineStore('course', () => {
     previewResult.value = null
     previewBlocks.value = null
     existingBlocksMeta.value = {}
+    existingBlocksBySection.value = {}
     currentStep.value = 1
   }
 
@@ -565,7 +614,7 @@ export const useCourseStore = defineStore('course', () => {
     // Actions
     verifyConnection, fetchCourses, selectCourse,
     scanSelectedCourse, requestPreview, applyCustomization,
-    applyGeneral, applyBlocks,
+    applyGeneral, applyBlocks, loadBlocksForSection,
     duplicateSelectedCourse, resetForm, setStep,
   }
 })
