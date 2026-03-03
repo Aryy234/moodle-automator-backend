@@ -22,6 +22,13 @@ $functions = [
         'ajax'         => true,
         'capabilities' => 'moodle/course:manageactivities',
     ],
+    'local_sectionedit_update_label' => [
+        'classname'   => 'local_sectionedit\external\update_label',
+        'description'  => 'Update the HTML content of an existing label (Text and media area).',
+        'type'         => 'write',
+        'ajax'         => true,
+        'capabilities' => 'moodle/course:manageactivities',
+    ],
     'local_sectionedit_get_question_categories' => [
         'classname'    => 'local_sectionedit\external\get_question_categories',
         'description'  => 'Get question categories for a course from the question bank.',
@@ -67,6 +74,7 @@ $services = [
         'functions'       => [
             'local_sectionedit_update_section_summary',
             'local_sectionedit_add_label_to_section',
+            'local_sectionedit_update_label',
             'local_sectionedit_get_question_categories',
             'local_sectionedit_create_question_category',
             'local_sectionedit_import_questions',

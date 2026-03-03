@@ -85,7 +85,7 @@
 
       <div class="space-y-4">
         <div v-for="ph in scanResult.placeholders" :key="ph.placeholder_key">
-          <label class="block text-xs font-medium text-text-secondary mb-1.5 flex items-center gap-2">
+          <label class="text-xs font-medium text-text-secondary mb-1.5 flex items-center gap-2">
             <span
               class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider"
               :class="ph.element_type === 'iframe' ? 'bg-pastel-sky text-accent' : 'bg-pastel-pink text-secondary'"
@@ -93,6 +93,23 @@
               {{ ph.element_type === 'iframe' ? 'embed' : 'link' }}
             </span>
             {{ placeholderLabel(ph.placeholder_key) }}
+            <!-- Indicador: ¿ya tiene URL real o sigue como placeholder? -->
+            <span v-if="isConfigured(ph)"
+                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-pastel-mint text-success-dark font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Configurado
+            </span>
+            <span v-else
+                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-pastel-peach text-warning-dark font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Pendiente
+            </span>
           </label>
           <div class="relative">
             <input
@@ -227,6 +244,48 @@
         >
           + Agregar referencia
         </button>
+      </div>
+    </div>
+
+    <!-- ========== BOTÓN GUARDAR SECCIÓN GENERAL ========== -->
+    <div class="flex flex-col items-end gap-2">
+      <button
+        @click="handleSaveGeneral"
+        :disabled="savingGeneral"
+        class="px-6 py-3 rounded-xl bg-success-dark text-white text-sm font-semibold
+               hover:bg-success-dark/90 transition-all duration-200 shadow-lg shadow-success-dark/20
+               flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <svg v-if="savingGeneral" class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+        </svg>
+        {{ savingGeneral ? 'Guardando...' : 'Guardar Sección General' }}
+      </button>
+
+      <!-- Feedback: success -->
+      <div v-if="generalSaveOk"
+           class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-mint border border-success/20 text-xs text-success-dark w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        {{ generalSaveOk }}
+      </div>
+
+      <!-- Feedback: error -->
+      <div v-if="generalSaveErr"
+           class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-pink border border-danger/20 text-xs text-danger-dark w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        {{ generalSaveErr }}
       </div>
     </div>
 
@@ -541,6 +600,51 @@
       </div><!-- /p-6 -->
     </div><!-- /card Semana 1 -->
 
+    <!-- ========== BOTÓN GUARDAR BLOQUES DE CONTENIDO ========== -->
+    <div class="flex flex-col items-end gap-2">
+      <button
+        @click="handleSaveBlocks"
+        :disabled="savingBlocks || !selectedSectionId"
+        class="px-6 py-3 rounded-xl bg-primary text-white text-sm font-semibold
+               hover:bg-primary-dark transition-all duration-200 shadow-lg shadow-primary/20
+               flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <svg v-if="savingBlocks" class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+        </svg>
+        {{ savingBlocks ? 'Guardando...' : 'Guardar Bloques de Contenido' }}
+      </button>
+
+      <p v-if="!selectedSectionId" class="text-[11px] text-warning-dark">
+        Selecciona una sección de Moodle para habilitar este guardado.
+      </p>
+
+      <!-- Feedback: success -->
+      <div v-if="blocksSaveOk"
+           class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-mint border border-success/20 text-xs text-success-dark w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        {{ blocksSaveOk }}
+      </div>
+
+      <!-- Feedback: error -->
+      <div v-if="blocksSaveErr"
+           class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-pink border border-danger/20 text-xs text-danger-dark w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        {{ blocksSaveErr }}
+      </div>
+    </div>
+
     <!-- ====================================================== -->
     <!--  CUESTIONARIOS — IMPORTAR QUIZ                         -->
     <!-- ====================================================== -->
@@ -568,7 +672,52 @@ const props = defineProps({
 })
 
 // ========== Selector de sección ==========
-const selectedSectionId = ref('')
+const selectedSectionId = ref(props.form.section_id || '')
+
+// ========== Estado de guardado por partes ==========
+const savingGeneral = ref(false)
+const generalSaveOk = ref('')
+const generalSaveErr = ref('')
+
+const savingBlocks = ref(false)
+const blocksSaveOk = ref('')
+const blocksSaveErr = ref('')
+
+async function handleSaveGeneral() {
+  savingGeneral.value = true
+  generalSaveOk.value = ''
+  generalSaveErr.value = ''
+  try {
+    const result = await store.applyGeneral()
+    if (result) {
+      generalSaveOk.value = `✅ Guardado exitoso — ${result.total_replacements ?? 0} cambios aplicados.`
+    } else if (store.errors.applyGeneral) {
+      generalSaveErr.value = store.errors.applyGeneral
+    }
+  } catch (err) {
+    generalSaveErr.value = err.message || 'Error inesperado al guardar sección general.'
+  } finally {
+    savingGeneral.value = false
+  }
+}
+
+async function handleSaveBlocks() {
+  savingBlocks.value = true
+  blocksSaveOk.value = ''
+  blocksSaveErr.value = ''
+  try {
+    const result = await store.applyBlocks()
+    if (result) {
+      blocksSaveOk.value = `✅ Bloques guardados exitosamente.`
+    } else if (store.errors.applyBlocks) {
+      blocksSaveErr.value = store.errors.applyBlocks
+    }
+  } catch (err) {
+    blocksSaveErr.value = err.message || 'Error inesperado al guardar bloques.'
+  } finally {
+    savingBlocks.value = false
+  }
+}
 
 function onSectionChange() {
   const sec = store.courseSections.find((s) => s.id === selectedSectionId.value)
@@ -576,6 +725,14 @@ function onSectionChange() {
     props.form.section_id = sec.id
     props.form.section_number = sec.section
   }
+}
+
+// ========== Helpers ==========
+/** Devuelve true si un placeholder ya fue configurado con una URL real */
+function isConfigured(ph) {
+  if (!ph.current_value) return false
+  // Si current_value es distinto del placeholder_key, ya fue configurado
+  return ph.current_value !== ph.placeholder_key
 }
 
 // ========== Mapeador de labels ==========
@@ -593,13 +750,31 @@ function placeholderLabel(key) {
   return labels[key] || key
 }
 
+const PLACEHOLDER_TO_FIELD = {
+  'video-introductorio': 'video_introductorio',
+  'unirse-clases':       'unirse_clases',
+  'url-grabaciones':     'url_grabaciones',
+  'perfil-docente':      'perfil_docente',
+  'silabo':              'silabo',
+  'pea':                 'pea',
+  'bibliografia':        'bibliografia_url',
+}
+
 function formKey(placeholderKey) {
-  return placeholderKey.replace(/-/g, '_')
+  return PLACEHOLDER_TO_FIELD[placeholderKey] || placeholderKey.replace(/-/g, '_')
 }
 
 // ========== Schedule ==========
-const scheduleDaysInput = ref('Lunes, Martes, Miércoles, Jueves, Viernes')
-const scheduleEntries = ref([])
+const scheduleDaysInput = ref(
+  props.form.schedule?.days_columns?.length > 0
+    ? props.form.schedule.days_columns.join(', ')
+    : 'Lunes, Martes, Miércoles, Jueves, Viernes'
+)
+const scheduleEntries = ref(
+  props.form.schedule?.entries?.length > 0
+    ? props.form.schedule.entries.map((e) => ({ subject_name: e.subject_name || '', days: { ...e.days } }))
+    : []
+)
 
 const scheduleDays = computed(() =>
   scheduleDaysInput.value.split(',').map((d) => d.trim()).filter(Boolean)
@@ -631,7 +806,11 @@ watch(
 )
 
 // ========== Bibliography ==========
-const bibliographyEntries = ref([])
+const bibliographyEntries = ref(
+  props.form.bibliography?.entries?.length > 0
+    ? props.form.bibliography.entries.map((e) => ({ text: e.text || '', url: e.url || '' }))
+    : []
+)
 
 function addBibliographyEntry() {
   bibliographyEntries.value.push({ text: '', url: '' })
@@ -654,7 +833,12 @@ watch(
 )
 
 // ========== Presentaciones ==========
-const presentations = ref([])
+// Inicializar desde datos pre-llenados del store (existing_blocks)
+const presentations = ref(
+  props.form.presentations?.length > 0
+    ? props.form.presentations.map((p) => ({ title: p.title || '', url: p.url || '' }))
+    : []
+)
 
 function addPresentation() {
   presentations.value.push({ title: '', url: '' })
@@ -669,8 +853,18 @@ watch(presentations, () => {
 }, { deep: true })
 
 // ========== Lectura ==========
-const mainReading = reactive({ title: '', author: '', url: '', summary: '' })
-const suggestedReadings = ref([])
+const _existingMain = props.form.main_reading
+const mainReading = reactive({
+  title:   _existingMain?.title   || '',
+  author:  _existingMain?.author  || '',
+  url:     _existingMain?.url     || '',
+  summary: _existingMain?.summary || '',
+})
+const suggestedReadings = ref(
+  props.form.suggested_readings?.length > 0
+    ? props.form.suggested_readings.map((r) => ({ title: r.title || '', author: r.author || '', url: r.url || '' }))
+    : []
+)
 const showReadingLabels = ref(false)
 
 function addSuggestedReading() {
@@ -692,7 +886,11 @@ watch(
 )
 
 // ========== Videos ==========
-const videos = ref([])
+const videos = ref(
+  props.form.videos?.length > 0
+    ? props.form.videos.map((v) => ({ title: v.title || '', url: v.url || '' }))
+    : []
+)
 
 function addVideo() {
   videos.value.push({ title: '', url: '' })

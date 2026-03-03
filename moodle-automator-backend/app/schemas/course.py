@@ -8,6 +8,13 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, HttpUrl
 
 
+class UpdateCourseRequest(BaseModel):
+    """Schema para actualizar campos de un curso en Moodle."""
+    idnumber: Optional[str] = Field(None, description="Número ID interno del curso (ej: MAT-2026-A)")
+    fullname: Optional[str] = Field(None, description="Nombre completo del curso")
+    shortname: Optional[str] = Field(None, description="Nombre corto del curso")
+
+
 class CourseBase(BaseModel):
     """Schema base para datos de curso"""
     fullname: str = Field(..., description="Nombre completo del curso")

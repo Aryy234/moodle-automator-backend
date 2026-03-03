@@ -17,6 +17,7 @@ from app.schemas.editor import (
     ReplacementDetail,
     ScheduleUpdateRequest,
     BibliographyUpdateRequest,
+    ExistingBlockInfo,
 )
 
 # ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ class HTMLProcessor:
         """Serializa el soup a string sin agregar wrappers html/body."""
         return soup.decode_contents()
 
-    def _collapse_wrapper(self, collapse_id: str, icon: str, label: str, content: str) -> str:
+    def _collapse_wrapper(self, collapse_id: str, icon: str, label: str, content: str, block_type: str = "") -> str:
         """
         Genera el envoltorio curcollapse estándar reutilizable.
 
@@ -74,8 +75,10 @@ class HTMLProcessor:
             icon:        Clase del ícono Font Awesome (ej. 'fa-person-chalkboard')
             label:       Texto del botón/título
             content:     HTML interior del card body
+            block_type:  Tipo de bloque para marcado (presentations, reading, videos)
         """
-        return f'''<div class="curcollapse">
+        bt_attr = f' data-block-type="{block_type}"' if block_type else ""
+        return f'''<div class="curcollapse"{bt_attr}>
   <div class="collapsed titcur presscollapse" data-bs-toggle="collapse"
     data-bs-target="#{collapse_id}" aria-expanded="false"
     aria-controls="{collapse_id}">
@@ -148,7 +151,7 @@ class HTMLProcessor:
       </div>'''
 
         content = iframes + sidebar
-        return self._collapse_wrapper("curs1pres1", "fa-person-chalkboard", collapse_label, content)
+        return self._collapse_wrapper("curs1pres1", "fa-person-chalkboard", collapse_label, content, block_type="presentations")
 
     def render_main_reading_block(
         self,
@@ -229,7 +232,7 @@ class HTMLProcessor:
       </div>'''
 
         content = main_section + summary_section + suggested_section
-        return self._collapse_wrapper("curs1lect1", "fa-book-open-reader", "  Lectura", content)
+        return self._collapse_wrapper("curs1lect1", "fa-book-open-reader", "  Lectura", content, block_type="reading")
 
     def render_videos_block(
         self,
@@ -279,7 +282,7 @@ class HTMLProcessor:
       </div>'''
 
         content = video_items + summary_section
-        return self._collapse_wrapper("curs1vid1", "fa-play", "Video", content)
+        return self._collapse_wrapper("curs1vid1", "fa-play", "Video", content, block_type="videos")
 
     # -----------------------------------------------------------------------
     # ESCANEO DE PLACEHOLDERS
@@ -289,13 +292,19 @@ class HTMLProcessor:
         """
         Escanea el HTML y retorna placeholders conocidos, título, descripción,
         y si hay horario/bibliografía.
+
+        Detecta tanto placeholders vírgenes (valor == clave conocida) como
+        elementos ya reemplazados que llevan ``data-placeholder``.
         """
         soup = self._parse(html)
         found: List[PlaceholderFound] = []
+        seen_keys: set = set()
 
         for tag in soup.find_all(["a", "iframe"]):
             attr  = "href" if tag.name == "a" else "src"
             value = tag.get(attr, "")
+
+            # Caso 1: placeholder original sin reemplazar
             if value in KNOWN_PLACEHOLDERS:
                 context = tag.get_text(strip=True) if tag.name == "a" else ""
                 found.append(PlaceholderFound(
@@ -303,7 +312,23 @@ class HTMLProcessor:
                     attribute=attr,
                     placeholder_key=value,
                     context_text=context or None,
+                    current_value=value,
                 ))
+                seen_keys.add(value)
+                continue
+
+            # Caso 2: elemento ya reemplazado (tiene data-placeholder)
+            dp_key = tag.get("data-placeholder", "")
+            if dp_key and dp_key in KNOWN_PLACEHOLDERS and dp_key not in seen_keys:
+                context = tag.get_text(strip=True) if tag.name == "a" else ""
+                found.append(PlaceholderFound(
+                    element_type=tag.name,
+                    attribute=attr,
+                    placeholder_key=dp_key,
+                    context_text=context or None,
+                    current_value=value,  # URL real actual
+                ))
+                seen_keys.add(dp_key)
 
         title_tag    = soup.select_one(".texto h1") or soup.find("h1")
         course_title = title_tag.get_text(strip=True) if title_tag else None
@@ -321,7 +346,285 @@ class HTMLProcessor:
             "course_description": course_desc,
             "schedule_found":    soup.find("div", id="cronograma") is not None,
             "bibliography_found": soup.find("div", id="biblio") is not None,
+            "existing_schedule":    self._extract_schedule(soup),
+            "existing_bibliography": self._extract_bibliography(soup),
         }
+
+    # -----------------------------------------------------------------------
+    # EXTRACCIÓN DE DATOS EXISTENTES (horario y bibliografía)
+    # -----------------------------------------------------------------------
+
+    def _extract_schedule(self, soup: BeautifulSoup) -> Optional[dict]:
+        """
+        Extrae los datos actuales del horario del HTML (#cronograma).
+
+        Retorna ``{days_columns: [...], entries: [...]}`` o ``None``.
+        """
+        modal = soup.find("div", id="cronograma")
+        if not modal:
+            return None
+
+        table = modal.find("table")
+        if not table:
+            return None
+
+        # Extraer las columnas de días del segundo <tr> del thead
+        thead = table.find("thead")
+        if not thead:
+            return None
+        header_rows = thead.find_all("tr")
+        if len(header_rows) < 2:
+            return None
+
+        headers = [th.get_text(strip=True) for th in header_rows[1].find_all("th")]
+        if len(headers) < 2:
+            return None
+        days_columns = headers[1:]  # Quitar "Asignatura"
+
+        # Extraer las filas del tbody
+        tbody = table.find("tbody")
+        if not tbody:
+            return None
+
+        entries = []
+        for row in tbody.find_all("tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all("td")]
+            if not cells:
+                continue
+            subject_name = cells[0]
+            days = {}
+            for i, day in enumerate(days_columns):
+                days[day] = cells[i + 1] if i + 1 < len(cells) else ""
+            # Ignorar filas de template vacías
+            if subject_name and any(v and v != "—" for v in days.values()):
+                entries.append({"subject_name": subject_name, "days": days})
+
+        if not entries:
+            return None
+
+        return {"days_columns": days_columns, "entries": entries}
+
+    def _extract_bibliography(self, soup: BeautifulSoup) -> Optional[dict]:
+        """
+        Extrae los datos actuales de bibliografía del HTML (#biblio).
+
+        Retorna ``{entries: [{text, url}]}`` o ``None``.
+        """
+        modal = soup.find("div", id="biblio")
+        if not modal:
+            return None
+
+        entries = []
+        for link in modal.find_all("a", href=True):
+            href = link.get("href", "")
+            text = link.get_text(strip=True).lstrip("•").strip()
+
+            # Ignorar placeholders sin configurar o textos vacíos
+            if href == "bibliografia" or not text or not href:
+                continue
+            # Ignorar links del modal mismo (botón cerrar, etc.)
+            if href.startswith("#"):
+                continue
+
+            entries.append({"text": text, "url": href})
+
+        if not entries:
+            return None
+
+        return {"entries": entries}
+
+    # -----------------------------------------------------------------------
+    # ESCANEO DE BLOQUES AVANZADOS (labels independientes)
+    # -----------------------------------------------------------------------
+
+    # Mapa de IDs de collapse → tipo de bloque (fallback para labels sin data-block-type)
+    _COLLAPSE_ID_MAP = {
+        "curs1pres1": "presentations",
+        "curs1lect1": "reading",
+        "curs1vid1":  "videos",
+    }
+
+    def scan_block_label(self, html: str) -> Optional[ExistingBlockInfo]:
+        """
+        Analiza el HTML de un label buscando un bloque avanzado.
+
+        Estrategia de detección (en orden):
+        1. Atributo ``data-block-type`` (labels creados con la versión actual)
+        2. ID de collapse conocido (``curs1pres1``, ``curs1lect1``, ``curs1vid1``)
+           para labels creados antes de que se añadiera ``data-block-type``.
+
+        Retorna un ``ExistingBlockInfo`` si detecta un bloque, o ``None``.
+        """
+        soup = self._parse(html)
+
+        # --- Estrategia 1: data-block-type ---
+        wrapper = soup.find(attrs={"data-block-type": True})
+        block_type: Optional[str] = None
+
+        if wrapper:
+            block_type = wrapper["data-block-type"]
+        else:
+            # --- Estrategia 2: fallback por IDs de collapse ---
+            for collapse_id, btype in self._COLLAPSE_ID_MAP.items():
+                el = soup.find(id=collapse_id)
+                if el:
+                    wrapper = el.find_parent("div", class_="curcollapse") or soup
+                    block_type = btype
+                    break
+
+        if not wrapper or not block_type:
+            return None
+
+        # --- Extraer collapse_label del h5 del encabezado ---
+        collapse_label: Optional[str] = None
+        h5_el = wrapper.find("h5")
+        if h5_el:
+            # Obtener texto sin el ícono <i>
+            raw = h5_el.get_text(strip=True)
+            collapse_label = raw.strip()
+
+        items: list = []
+        summary_text: Optional[str] = None
+
+        # Campos específicos por tipo
+        presentations_list: Optional[list] = None
+        presentation_objective: Optional[str] = None
+        videos_list: Optional[list] = None
+        videos_summary_val: Optional[str] = None
+        main_reading_val: Optional[dict] = None
+        suggested_readings_val: Optional[list] = None
+        reading_section_title: Optional[str] = None
+        reading_button_text: Optional[str] = None
+        reading_suggested_title: Optional[str] = None
+
+        if block_type in ("presentations", "videos"):
+            # Extraer cada iframe + su título h4
+            extracted = []
+            for iframe in wrapper.find_all("iframe"):
+                url = iframe.get("src", "")
+                # Buscar el h4 más cercano anterior (dentro del mismo row)
+                row = iframe.find_parent("div", class_="row")
+                title = ""
+                if row:
+                    h4 = row.find("h4")
+                    if h4:
+                        title = h4.get_text(strip=True)
+                extracted.append({"title": title, "url": url})
+            items = extracted
+
+            # Resumen
+            resumen_div = wrapper.find("h4", string=lambda t: t and "Resumen" in t)
+            if resumen_div:
+                p = resumen_div.find_next("p")
+                if p:
+                    summary_text = p.get_text(strip=True)
+
+            # Objetivo de aprendizaje (solo presentaciones)
+            objetivo_h5 = wrapper.find("h5", string=lambda t: t and "Objetivo" in t)
+            if objetivo_h5:
+                li = objetivo_h5.find_next("li")
+                if li:
+                    obj_text = li.get_text(strip=True)
+                    if block_type == "presentations":
+                        presentation_objective = obj_text
+                    else:
+                        summary_text = obj_text
+
+            if block_type == "presentations":
+                presentations_list = extracted
+            else:
+                videos_list = extracted
+                videos_summary_val = summary_text
+
+        elif block_type == "reading":
+            # --- Lectura principal: btn-primary ---
+            main_btn = wrapper.find("a", class_=lambda c: c and "btn-primary" in c and "btn-outline" not in c)
+            if main_btn:
+                url = main_btn.get("href", "")
+                reading_button_text = main_btn.get_text(strip=True)
+                item_div = main_btn.find_parent("div", class_="list-group-item")
+                title = ""
+                author = ""
+                if item_div:
+                    inner = item_div.find("div")
+                    if inner:
+                        strong = inner.find("strong")
+                        em = inner.find("em")
+                        if strong:
+                            title = strong.get_text(strip=True).lstrip("📘").strip()
+                        if em:
+                            author = em.get_text(strip=True)
+
+                # Resumen de lectura
+                summary_val = ""
+                resumen_h4 = wrapper.find("h4", string=lambda t: t and "Resumen" in t)
+                if resumen_h4:
+                    p = resumen_h4.find_next("p")
+                    if p:
+                        summary_val = p.get_text(strip=True)
+                        summary_text = summary_val
+
+                main_reading_val = {
+                    "title": title,
+                    "author": author,
+                    "url": url,
+                    "summary": summary_val,
+                }
+                items.append({"title": title, "author": author, "url": url})
+
+            # --- Título h4 de la sección (el primer h4 que no sea "Resumen") ---
+            for h4 in wrapper.find_all("h4"):
+                txt = h4.get_text(strip=True)
+                if txt and "Resumen" not in txt:
+                    reading_section_title = txt
+                    break
+
+            # --- Lecturas sugeridas: btn-outline-primary ---
+            suggested = []
+            for a_tag in wrapper.find_all("a", class_=lambda c: c and "btn-outline-primary" in c):
+                url = a_tag.get("href", "")
+                item_div = a_tag.find_parent("div", class_="list-group-item")
+                title = ""
+                author = ""
+                if item_div:
+                    inner = item_div.find("div")
+                    if inner:
+                        strong = inner.find("strong")
+                        em = inner.find("em")
+                        if strong:
+                            title = strong.get_text(strip=True).lstrip("📘").strip()
+                        if em:
+                            author = em.get_text(strip=True)
+                suggested.append({"title": title, "author": author, "url": url})
+                items.append({"title": title, "author": author, "url": url})
+            suggested_readings_val = suggested if suggested else None
+
+            # --- Título de la sección de sugeridas (h5 antes del list-group de sugeridas) ---
+            for h5 in wrapper.find_all("h5"):
+                txt = h5.get_text(strip=True)
+                if txt and txt != collapse_label and "Objetivo" not in txt:
+                    reading_suggested_title = txt
+                    break
+
+        return ExistingBlockInfo(
+            block_type=block_type,
+            collapse_label=collapse_label,
+            # Presentaciones
+            presentations=presentations_list,
+            presentation_objective=presentation_objective,
+            # Lectura
+            main_reading=main_reading_val,
+            suggested_readings=suggested_readings_val,
+            reading_section_title=reading_section_title,
+            reading_button_text=reading_button_text,
+            reading_suggested_title=reading_suggested_title,
+            # Videos
+            videos=videos_list,
+            videos_summary=videos_summary_val,
+            # Legacy
+            items=items,
+            summary_text=summary_text,
+        )
 
     # -----------------------------------------------------------------------
     # REEMPLAZO DE PLACEHOLDERS
@@ -336,19 +639,42 @@ class HTMLProcessor:
     def replace_placeholders_batch(
         self, html: str, replacements: Dict[str, str]
     ) -> Tuple[str, List[ReplacementDetail]]:
-        """Reemplaza múltiples placeholders en una sola pasada."""
+        """
+        Reemplaza múltiples placeholders en una sola pasada.
+
+        Marca cada elemento con ``data-placeholder="<key>"`` para que
+        futuros escaneos sigan encontrándolo incluso después de que el
+        valor original haya sido sustituido por una URL real.
+        """
         soup    = self._parse(html)
         details: List[ReplacementDetail] = []
 
         for tag in soup.find_all(["a", "iframe"]):
             attr  = "href" if tag.name == "a" else "src"
             value = tag.get(attr, "")
+
+            # Caso 1: valor original sigue siendo un placeholder conocido
             if value in replacements:
-                new_val    = replacements[value]
-                tag[attr]  = new_val
+                placeholder_key = value
+                new_val = replacements[value]
+                tag[attr] = new_val
+                tag["data-placeholder"] = placeholder_key
                 details.append(ReplacementDetail(
-                    field=f"{tag.name}[{attr}]={value}",
-                    old_value=value,
+                    field=f"{tag.name}[{attr}]={placeholder_key}",
+                    old_value=placeholder_key,
+                    new_value=new_val,
+                ))
+                continue
+
+            # Caso 2: el elemento ya fue reemplazado antes (tiene data-placeholder)
+            existing_key = tag.get("data-placeholder", "")
+            if existing_key and existing_key in replacements:
+                new_val = replacements[existing_key]
+                old_val = value
+                tag[attr] = new_val
+                details.append(ReplacementDetail(
+                    field=f"{tag.name}[{attr}]={existing_key}",
+                    old_value=old_val,
                     new_value=new_val,
                 ))
 

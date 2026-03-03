@@ -12,7 +12,8 @@ from app.schemas.course import (
     CourseListResponse,
     CourseDuplicateRequest,
     CourseDuplicateResponse,
-    CourseContentsResponse
+    CourseContentsResponse,
+    UpdateCourseRequest,
 )
 from app.services.cloner_service import ClonerService, get_cloner_service
 from app.integration.moodle_client import MoodleClient, get_moodle_client, MoodleAPIError
@@ -66,6 +67,30 @@ async def get_course(
         )
     
     return course
+
+
+@router.put(
+    "/{course_id}",
+    summary="Actualizar metadatos del curso",
+    description="Actualiza campos del curso como idnumber, fullname o shortname.",
+)
+async def update_course(
+    course_id: int,
+    data: UpdateCourseRequest,
+    moodle: MoodleClient = Depends(get_moodle_client),
+):
+    """
+    Actualiza campos del curso en Moodle vía core_course_update_courses.
+    Solo se actualizan los campos enviados (los null se ignoran).
+    """
+    update_fields = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    try:
+        await moodle.update_course(course_id, **update_fields)
+        return {"success": True, "course_id": course_id, "updated_fields": list(update_fields.keys())}
+    except MoodleAPIError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 
 @router.get(

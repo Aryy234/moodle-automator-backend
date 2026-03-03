@@ -87,6 +87,12 @@ Analiza el HTML de la sección General y detecta todos los elementos editables.
 | `bibliography_found` | bool | Si existe sección de bibliografía editable |
 | `course_title` | string \| null | Título actual del curso dentro del HTML |
 | `course_description` | string \| null | Descripción actual dentro del HTML |
+| `existing_blocks` | array | **Bloques de contenido ya existentes** (presentaciones, lectura, videos) con su contenido extraído. Ver [sección detallada](#existing_blocks). |
+| `existing_schedule` | object \| null | **Datos actuales del horario** ya configurado (si existe). Ver [estructura](#existing_schedule). |
+| `existing_bibliography` | object \| null | **Datos actuales de bibliografía** ya configurada (si existe). Ver [estructura](#existing_bibliography). |
+| `template_source` | string | `"label"` o `"section_summary"` — dónde vive el template |
+| `can_save` | bool | `true` si el template se puede editar vía API |
+| `save_hint` | string \| null | Mensaje si `can_save` es `false` |
 
 Cada placeholder:
 
@@ -96,6 +102,7 @@ Cada placeholder:
 | `attribute` | string | `"href"` o `"src"` |
 | `placeholder_key` | string | Clave identificadora (ver tabla abajo) |
 | `context_text` | string \| null | Texto visible del enlace (solo para `<a>`) |
+| `current_value` | string \| null | **Valor actual** del atributo. Si empieza con `http`, ya fue configurado previamente. Si coincide con `placeholder_key`, aún no se ha reemplazado. |
 
 **Placeholders conocidos del template:**
 
@@ -108,6 +115,158 @@ Cada placeholder:
 | `silabo` | Sílabo del curso | iframe (src) |
 | `pea` | PEA del curso | iframe (src) |
 | `bibliografia` | Enlace de bibliografía | a (href) |
+
+#### <a id="existing_blocks"></a> Estructura de `existing_blocks`
+
+Cada elemento del array describe un bloque de contenido detectado en **cualquier sección** del curso:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `block_type` | string | `"presentations"`, `"reading"` o `"videos"` |
+| `label_cmid` | int | Course module ID del label |
+| `label_instance_id` | int | Instance ID del label (para update) |
+| `section_id` | int | ID de la sección donde vive el bloque |
+| `section_number` | int | Número de sección (0=General, 1=Semana 1, …) |
+| `collapse_label` | string | Texto del botón collapse del bloque |
+
+**Campos específicos por tipo de bloque:**
+
+**Presentaciones** (`block_type == "presentations"`):
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `presentations` | array | `[{title, url}]` — cada presentación con su iframe |
+| `presentation_objective` | string \| null | Objetivo de aprendizaje del bloque |
+
+**Lectura** (`block_type == "reading"`):
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `main_reading` | object | `{title, author, url, summary}` — lectura principal |
+| `suggested_readings` | array \| null | `[{title, author, url}]` — lecturas sugeridas |
+| `reading_section_title` | string \| null | Título h4 (ej. "Lectura principal") |
+| `reading_button_text` | string \| null | Texto del botón (ej. "Ver lectura") |
+| `reading_suggested_title` | string \| null | Título de sugeridas (ej. "Lecturas sugeridas") |
+
+**Videos** (`block_type == "videos"`):
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `videos` | array | `[{title, url}]` — cada video con su iframe |
+| `videos_summary` | string \| null | Texto resumen de los videos |
+
+**Ejemplo de respuesta `existing_blocks`:**
+
+```json
+[
+  {
+    "block_type": "presentations",
+    "label_cmid": 4521,
+    "label_instance_id": 891,
+    "section_id": 1692,
+    "section_number": 1,
+    "collapse_label": "Introducción a Python",
+    "presentations": [
+      { "title": "Introducción a Python", "url": "https://canva.com/slide1" },
+      { "title": "POO en Python", "url": "https://canva.com/slide2" }
+    ],
+    "presentation_objective": "Comprender las bases de Python"
+  },
+  {
+    "block_type": "reading",
+    "label_cmid": 4522,
+    "label_instance_id": 892,
+    "section_id": 1692,
+    "section_number": 1,
+    "collapse_label": "Lectura",
+    "main_reading": {
+      "title": "Clean Code",
+      "author": "Robert C. Martin",
+      "url": "https://example.com/clean-code",
+      "summary": "Un libro sobre código limpio."
+    },
+    "suggested_readings": [
+      { "title": "Refactoring", "author": "Martin Fowler", "url": "https://example.com/refactoring" }
+    ],
+    "reading_section_title": "Lectura principal",
+    "reading_button_text": "Ver lectura",
+    "reading_suggested_title": "Lecturas sugeridas"
+  },
+  {
+    "block_type": "videos",
+    "label_cmid": 4523,
+    "label_instance_id": 893,
+    "section_id": 1692,
+    "section_number": 1,
+    "collapse_label": "Video",
+    "videos": [
+      { "title": "Tutorial Django", "url": "https://youtube.com/django" }
+    ],
+    "videos_summary": "Videos introductorios sobre frameworks web"
+  }
+]
+```
+
+#### <a id="existing_schedule"></a> Estructura de `existing_schedule`
+
+Si el horario ya fue configurado, devuelve los datos actuales:
+
+```json
+{
+  "days_columns": ["Lunes", "Martes", "Miércoles", "Jueves"],
+  "entries": [
+    {
+      "subject_name": "Programación I",
+      "days": { "Lunes": "18h30 – 19h30", "Martes": "20h00 – 21h00" }
+    }
+  ]
+}
+```
+
+> Si es `null`, el horario no ha sido configurado. Usar las columnas por defecto.
+
+#### <a id="existing_bibliography"></a> Estructura de `existing_bibliography`
+
+Si la bibliografía ya fue configurada:
+
+```json
+{
+  "entries": [
+    { "text": "Clean Code - Robert C. Martin", "url": "https://example.com/clean-code" },
+    { "text": "Refactoring - Martin Fowler", "url": "https://example.com/refactoring" }
+  ]
+}
+```
+
+> Si es `null`, la bibliografía no ha sido configurada.
+
+---
+
+### 4b. Actualizar Metadatos del Curso
+
+**`PUT /api/v1/courses/{course_id}`**
+
+Actualiza campos del curso en Moodle (idnumber, fullname, shortname).
+
+#### Body (JSON)
+
+```json
+{
+  "idnumber": "PROG-2026-A",
+  "fullname": "Programación I - 2026",
+  "shortname": "prog1-2026a"
+}
+```
+
+> Todos los campos son opcionales. Solo se actualizan los enviados.
+
+#### Respuesta
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `success` | bool | `true` si se actualizó correctamente |
+| `course_id` | int | ID del curso actualizado |
+| `updated_fields` | array | Lista de campos que se actualizaron |
 
 ---
 
@@ -179,7 +338,13 @@ Aplica las personalizaciones **sin guardar en Moodle**. Retorna el HTML resultan
         { "title": "Video 1", "url": "https://drive.google.com/..." },
         { "title": "Video 2", "url": "https://drive.google.com/..." }
       ],
-      "videos_summary": "Resumen de los videos..."
+      "videos_summary": "Resumen de los videos...",
+
+      "existing_labels": {
+        "presentations": { "label_cmid": 4521, "label_instance_id": 891 },
+        "reading": { "label_cmid": 4522, "label_instance_id": 892 },
+        "videos": { "label_cmid": 4523, "label_instance_id": 893 }
+      }
     }
   ]
 }
@@ -231,6 +396,18 @@ Aplica las personalizaciones **sin guardar en Moodle**. Retorna el HTML resultan
 |-------|------|-------------|
 | `videos` | array | Lista de dicts `{title, url}`. **Soporta múltiples.** Cada uno genera su propio iframe dentro del bloque. |
 | `videos_summary` | string | Texto resumen de los videos (aparece al pie del bloque) |
+
+**IDs de labels existentes** — para actualizar en vez de crear nuevos:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `existing_labels` | objeto \| null | Dict con IDs de labels existentes por tipo de bloque. Las claves son `"presentations"`, `"reading"` y/o `"videos"`. Cada valor tiene `label_cmid` y `label_instance_id`. |
+
+> **¿De dónde saco estos IDs?** Del scan (`GET /scan/{course_id}`): cada elemento de `existing_blocks` tiene `label_cmid` y `label_instance_id`. El frontend debe guardarlos y enviarlos de vuelta al personalizar.
+>
+> **¿Es obligatorio?** No. Si no se envían, el backend intenta detectar labels existentes automáticamente. Pero enviarlos es **más confiable** y evita duplicados en todos los casos.
+>
+> **¿Qué pasa si envío IDs parciales?** Se fusionan: los IDs del frontend tienen prioridad, el backend rellena lo que falte con detección automática.
 
 #### Estructura del campo `schedule`
 
@@ -354,16 +531,82 @@ El campo `processed_html` es un **JSON serializado** con esta estructura:
 Con la respuesta del scan, construir el formulario:
 
 - `placeholders` tiene elementos → input de URL por cada uno.
+  - **Pre-llenar** cada input con `current_value` si empieza con `http` (ya fue configurado).
 - `course_title` existe → input prellenado con el título actual.
 - `course_description` existe → textarea prellenado.
 - `schedule_found === true` → sección de horario con inputs por asignatura/día.
+  - **Pre-llenar** con `existing_schedule.entries` y `existing_schedule.days_columns` si no es `null`.
 - `bibliography_found === true` → sección de bibliografía.
+  - **Pre-llenar** con `existing_bibliography.entries` si no es `null`.
 
-**Además** (siempre disponibles, sans necesidad de scan):
+**Bloques de contenido** — pre-llenar si ya existen:
+
+```typescript
+// Pseudocódigo para pre-llenar bloques
+const scanResponse = await fetch(`/api/v1/editor/scan/${courseId}`);
+const { existing_blocks } = scanResponse;
+
+for (const block of existing_blocks) {
+  switch (block.block_type) {
+    case 'presentations':
+      // Pre-llenar array de presentaciones
+      form.presentations = block.presentations; // [{title, url}]
+      form.presentation_objective = block.presentation_objective;
+      break;
+
+    case 'reading':
+      // Pre-llenar lectura principal
+      form.main_reading = block.main_reading; // {title, author, url, summary}
+      form.suggested_readings = block.suggested_readings; // [{title, author, url}]
+      // Pre-llenar etiquetas configurables
+      form.reading_collapse_label = block.collapse_label;
+      form.reading_section_title = block.reading_section_title;
+      form.reading_button_text = block.reading_button_text;
+      form.reading_suggested_title = block.reading_suggested_title;
+      break;
+
+    case 'videos':
+      // Pre-llenar array de videos
+      form.videos = block.videos; // [{title, url}]
+      form.videos_summary = block.videos_summary;
+      break;
+  }
+}
+```
+
 - **Presentaciones**: botón "Agregar presentación" → array dinámico de `{title, url}`.
 - **Lectura principal**: campos `title`, `author`, `url`, `summary` + etiquetas configurables.
 - **Lecturas sugeridas**: botón "Agregar lectura sugerida" → array dinámico de `{title, author, url}`.
 - **Videos**: botón "Agregar video" → array dinámico de `{title, url}`.
+
+> **Importante:** Si `existing_blocks` contiene datos, el formulario debe iniciar con esos valores y el usuario puede modificarlos. Al guardar, los bloques se **actualizan** (no se duplican) siempre que se envíen los `existing_labels`.
+
+**Cómo construir `existing_labels` desde el scan:**
+
+```typescript
+// Construir existing_labels a partir de existing_blocks del scan
+const existingLabels: Record<string, { label_cmid: number; label_instance_id: number }> = {};
+for (const block of scanResponse.existing_blocks) {
+  existingLabels[block.block_type] = {
+    label_cmid: block.label_cmid,
+    label_instance_id: block.label_instance_id,
+  };
+}
+
+// Incluir en el request de customize
+const customizeRequest = {
+  course_id: 138,
+  sections: [{
+    section_id: 1692,
+    section_number: 1,
+    presentations: form.presentations,
+    videos: form.videos,
+    main_reading: form.main_reading,
+    existing_labels: existingLabels,  // ← esto evita duplicados
+  }]
+};
+await fetch('/api/v1/editor/customize', { method: 'POST', body: JSON.stringify(customizeRequest) });
+```
 
 ### Paso 3: Preview
 1. Armar el JSON con los campos que el usuario llenó, dentro de `sections[].`.
@@ -391,14 +634,46 @@ Con la respuesta del scan, construir el formulario:
 
 - **Todos los campos de personalización son opcionales.** Solo se modifican los que se envíen con valor.
 - **Los 3 bloques de contenido (Presentaciones, Lectura, Videos) crean labels SEPARADOS** en Moodle — no se concatenan al summary de la sección.
-- **Los labels se crean en orden**: primero Presentación, luego Lectura, luego Video. Si ya existen labels de ejecuciones anteriores, se agregarán nuevos al final de la sección.
-- **Los placeholders** son valores fijos en el HTML (`video-introductorio`, `unirse-clases`, etc.) que se reemplazan por URLs reales en el summary de la sección.
+- **Los labels se crean en orden**: primero Presentación, luego Lectura, luego Video. Si ya existen labels de ejecuciones anteriores, **se actualizan en lugar de duplicarse** (detección por `data-block-type` o ID de collapse).
+- **Los placeholders** son valores fijos en el HTML (`video-introductorio`, `unirse-clases`, etc.) que se reemplazan por URLs reales en el summary de la sección. Una vez reemplazados, el backend los marca con `data-placeholder` para que futuros escaneos sigan detectándolos.
 - **El campo `processed_html`** del preview es un JSON string (`JSON.parse()` para usarlo). Contiene las claves `summary`, `presentations_block`, `reading_block`, `videos_block` según los bloques enviados.
 - **CORS** configurado para `localhost:5173`. Agregar otros orígenes en la configuración del backend si es necesario.
 
 ---
 
 ## Changelog
+
+### v1.3 — Extracción de contenido existente + Pre-llenado (Marzo 2026)
+
+#### 🆕 Nuevas funcionalidades
+- **`existing_blocks` enriquecido**: El scan ahora extrae el contenido completo de cada bloque detectado (presentaciones, lectura, videos) con campos específicos por tipo:
+  - `presentations` / `presentation_objective` para bloques de presentación
+  - `main_reading` / `suggested_readings` / `reading_section_title` / `reading_button_text` / `reading_suggested_title` para bloques de lectura
+  - `videos` / `videos_summary` para bloques de video
+  - `collapse_label` — texto del botón collapse
+  - `section_id` / `section_number` — ubicación del bloque en el curso
+- **`existing_schedule`**: El scan devuelve los datos actuales del horario en formato `{days_columns, entries}` para pre-llenar el formulario.
+- **`existing_bibliography`**: El scan devuelve los datos actuales de bibliografía en formato `{entries: [{text, url}]}` para pre-llenar el formulario.
+- **`current_value` en placeholders**: Cada placeholder escaneado incluye su valor actual. Si empieza con `http`, ya fue configurado previamente.
+- **`PUT /api/v1/courses/{course_id}`**: Nuevo endpoint para actualizar metadatos del curso (idnumber, fullname, shortname).
+- **Bloques se actualizan, no se duplican**: Al re-personalizar un curso, los labels existentes se actualizan en lugar de crear nuevos. **Doble detección**: el backend detecta automáticamente (por `data-block-type` y por IDs de collapse), Y acepta `existing_labels` del frontend para mayor confiabilidad.
+- **`existing_labels` en customize/preview**: El frontend puede enviar los IDs de labels existentes (del scan) para garantizar la actualización. Se fusionan con la detección server-side: frontend tiene prioridad.
+- **Persistencia de placeholders**: Los elementos reemplazados se marcan con `data-placeholder` para que futuros escaneos los sigan detectando.
+
+#### ⚠️ Cambios en la respuesta del Scan
+- `existing_blocks[].items` y `existing_blocks[].summary_text` ahora son campos legacy (deprecados). Usar los campos específicos por tipo (`presentations`, `main_reading`, `videos`, etc.).
+- Nuevos campos en la respuesta raíz: `existing_schedule`, `existing_bibliography`, `template_source`, `can_save`, `save_hint`.
+
+### v1.3.1 — Fix: bloques se duplicaban en vez de actualizarse (Marzo 2026)
+
+#### 🐛 Bug fix crítico
+- **Los bloques ya NO se duplican.** El `update_label` ahora usa `local_sectionedit_update_label` (plugin propio) como método principal, con `mod_label_update_labels` como fallback. Antes solo usaba `mod_label_update_labels` que no estaba habilitado en el servicio web.
+- **Eliminado el silent fallthrough**: Si el update falla, el error se propaga al frontend en vez de crear un label duplicado silenciosamente.
+- **Debug logging**: El backend ahora imprime logs claros (`🔍 UPDATE instance_id=...` o `🔍 CREATE nuevo label`) para diagnosticar problemas.
+
+#### 🔧 Plugin Moodle actualizado (v1.2.7)
+- **Nueva función**: `local_sectionedit_update_label` — actualiza el contenido HTML de un label existente por su instance ID.
+- **⚠️ REQUIERE upgrade del plugin** en Moodle: Ir a Administración del sitio → Notificaciones para aplicar la actualización.
 
 ### v1.1 — Bloques separados + mayor flexibilidad (Feb 2026)
 

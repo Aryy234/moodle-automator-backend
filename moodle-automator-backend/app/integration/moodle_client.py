@@ -342,31 +342,42 @@ class MoodleClient:
         """
         Actualiza el contenido (intro) de un label en Moodle.
         
-        Usa mod_label_update_label si está disponible, o 
-        core_course_edit_module como fallback.
+        Usa ``local_sectionedit_update_label`` (plugin propio, más confiable)
+        como método principal. Si el plugin no está disponible, intenta
+        ``mod_label_update_labels`` como fallback.
         
         Args:
-            instance_id: ID de la instancia del label (no el cmid)
+            instance_id: ID de la instancia del label (mdl_label.id)
             new_content: Nuevo contenido HTML del label
         """
+        # --- Método 1: Plugin propio (más confiable) ---
+        try:
+            params = {
+                "labelid": instance_id,
+                "content": new_content,
+            }
+            result = await self._call_api("local_sectionedit_update_label", params)
+            print(f"✅ Label actualizado via local_sectionedit_update_label (instance={instance_id})")
+            return
+        except MoodleAPIError as e:
+            print(f"⚠️ local_sectionedit_update_label falló: {e.message}. Intentando fallback...")
+
+        # --- Método 2: Función core de Moodle (fallback) ---
         params = {
             "labels[0][id]": instance_id,
             "labels[0][intro]": new_content,
             "labels[0][introformat]": 1,  # HTML format
         }
-        
         try:
             await self._call_api("mod_label_update_labels", params)
+            print(f"✅ Label actualizado via mod_label_update_labels (instance={instance_id})")
         except MoodleAPIError as e:
-            # Fallback: si mod_label_update_labels no existe, intentar 
-            # con una llamada directa
-            if "accessexception" in str(e.error_code or "").lower() or \
-               "invalidrecord" in str(e.error_code or "").lower():
-                raise
-            # Si la función no existe, re-lanzar con mensaje claro
             raise MoodleAPIError(
-                message=f"No se pudo actualizar el label (instance={instance_id}): {e.message}. "
-                        "Asegúrate de que tu token tiene acceso a mod_label_update_labels.",
+                message=(
+                    f"No se pudo actualizar el label (instance={instance_id}): {e.message}. "
+                    "Verifica que: 1) El plugin local_sectionedit v1.2.7+ esté instalado, "
+                    "o 2) mod_label_update_labels esté habilitado en el servicio web."
+                ),
                 error_code=e.error_code,
                 debug_info=e.debug_info,
             )

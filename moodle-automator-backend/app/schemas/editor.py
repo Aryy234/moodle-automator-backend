@@ -46,6 +46,13 @@ class BibliographyUpdateRequest(BaseModel):
 
 # ==================== NUEVO: PERSONALIZACIÓN POR SECCIÓN ====================
 
+
+class ExistingLabelRef(BaseModel):
+    """Referencia a un label existente en Moodle (proveniente del scan)."""
+    label_cmid: Optional[int] = Field(None, description="Course module ID del label")
+    label_instance_id: Optional[int] = Field(None, description="Instance ID del label (necesario para update_label)")
+
+
 class SectionCustomizationData(BaseModel):
     """
     Datos de personalización para UNA sección específica (por ejemplo, una semana).
@@ -76,6 +83,15 @@ class SectionCustomizationData(BaseModel):
     reading_section_title: Optional[str] = Field(None, description="Título h4 interno del bloque de lectura. Ej: 'Lectura principal', 'Guia para la POO'")
     reading_button_text: Optional[str] = Field(None, description="Texto del botón de la lectura principal. Ej: 'Ver lectura', 'Ver Guia de apoyo'")
     reading_suggested_title: Optional[str] = Field(None, description="Título de la sección de lecturas sugeridas. Ej: 'Lecturas sugeridas', 'Libro de apoyo para mejorar el conocimiento'")
+    # IDs de labels existentes (para actualizar en vez de crear nuevos)
+    existing_labels: Optional[Dict[str, ExistingLabelRef]] = Field(
+        None,
+        description=(
+            "IDs de labels existentes por tipo de bloque, provenientes del scan. "
+            "Ej: {\"presentations\": {label_cmid: 123, label_instance_id: 45}, ...}. "
+            "Si se envían, el backend actualiza esos labels en vez de crear nuevos."
+        ),
+    )
 
 
 class CourseCustomizationRequest(BaseModel):
@@ -129,6 +145,61 @@ class PlaceholderFound(BaseModel):
     attribute: str = Field(..., description="Atributo donde se encontró (href, src)")
     placeholder_key: str = Field(..., description="Clave del placeholder (ej: video-introductorio)")
     context_text: Optional[str] = Field(None, description="Texto o contexto cercano")
+    current_value: Optional[str] = Field(None, description="Valor actual del atributo src/href. Si empieza con http/https ya fue configurado.")
+
+
+class ExistingBlockInfo(BaseModel):
+    """Información de un bloque (presentación, lectura, video) ya existente en una sección."""
+    block_type: str = Field(..., description="Tipo de bloque: presentations, reading, videos")
+    label_cmid: Optional[int] = Field(None, description="Course module ID del label que contiene el bloque")
+    label_instance_id: Optional[int] = Field(None, description="Instance ID del label (para update_label)")
+    section_id: Optional[int] = Field(None, description="ID de la sección donde está el bloque")
+    section_number: Optional[int] = Field(None, description="Número de sección (0=General, 1=Semana 1, etc.)")
+    collapse_label: Optional[str] = Field(None, description="Texto del botón collapse del bloque")
+
+    # --- Presentaciones (block_type == 'presentations') ---
+    presentations: Optional[List[dict]] = Field(
+        None,
+        description="Lista de presentaciones detectadas: [{title, url}]"
+    )
+    presentation_objective: Optional[str] = Field(
+        None, description="Objetivo de aprendizaje extraído del bloque"
+    )
+
+    # --- Lectura (block_type == 'reading') ---
+    main_reading: Optional[dict] = Field(
+        None,
+        description="Lectura principal: {title, author, url, summary}"
+    )
+    suggested_readings: Optional[List[dict]] = Field(
+        None,
+        description="Lecturas sugeridas: [{title, author, url}]"
+    )
+    reading_section_title: Optional[str] = Field(
+        None, description="Título h4 de la sección de lectura (ej. 'Lectura principal')"
+    )
+    reading_button_text: Optional[str] = Field(
+        None, description="Texto del botón de la lectura principal (ej. 'Ver lectura')"
+    )
+    reading_suggested_title: Optional[str] = Field(
+        None, description="Título de la sección de lecturas sugeridas"
+    )
+
+    # --- Videos (block_type == 'videos') ---
+    videos: Optional[List[dict]] = Field(
+        None,
+        description="Lista de videos detectados: [{title, url}]"
+    )
+    videos_summary: Optional[str] = Field(
+        None, description="Texto resumen de los videos"
+    )
+
+    # --- Legacy (compatibilidad) ---
+    items: List[dict] = Field(
+        default_factory=list,
+        description="(Deprecado) Contenido genérico del bloque. Usar los campos específicos."
+    )
+    summary_text: Optional[str] = Field(None, description="(Deprecado) Texto resumen/objetivo")
 
 
 class PlaceholderScanResponse(BaseModel):
@@ -154,6 +225,18 @@ class PlaceholderScanResponse(BaseModel):
     save_hint: Optional[str] = Field(
         None,
         description="Mensaje para el frontend si can_save=False"
+    )
+    existing_blocks: List[ExistingBlockInfo] = Field(
+        default_factory=list,
+        description="Bloques avanzados (presentación, lectura, video) ya existentes en la sección"
+    )
+    existing_schedule: Optional[dict] = Field(
+        None,
+        description="Datos actuales del horario: {days_columns: [...], entries: [{subject_name, days: {Lunes: '...', ...}}]}"
+    )
+    existing_bibliography: Optional[dict] = Field(
+        None,
+        description="Datos actuales de bibliografía: {entries: [{text, url}]}"
     )
 
 

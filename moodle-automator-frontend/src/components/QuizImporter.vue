@@ -155,7 +155,8 @@
               <ErrorMsg v-if="qStore.errors.createCategory" :msg="qStore.errors.createCategory" compact />
             </div>
 
-            <div v-if="qStore.selectedCategory" class="flex justify-end mt-4">
+            <div v-if="qStore.selectedCategory" class="flex justify-between mt-4">
+              <BtnBack @click="goToStep(1)" />
               <BtnNext @click="advanceTo(3)" />
             </div>
           </div>
@@ -263,7 +264,8 @@
               </table>
             </div>
 
-            <div class="flex justify-end">
+            <div class="flex justify-between">
+              <BtnBack @click="goToStep(2)" />
               <BtnNext @click="advanceTo(4)" label="Continuar" />
             </div>
           </div>
@@ -373,10 +375,22 @@
                 · Tiempo: {{ qStore.settingsResult.time_limit_display }}
               </span>
             </p>
+            <!-- Botón importar otro cuestionario -->
+            <button @click="startNewImport"
+              class="mt-3 w-full py-2.5 rounded-xl border-2 border-dashed border-accent/40 text-accent text-sm font-semibold
+                     hover:bg-accent/5 hover:border-accent transition-all duration-200 flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Importar otro cuestionario
+            </button>
           </div>
 
-          <!-- Botón guardar -->
-          <div class="flex justify-end">
+          <!-- Botones navegación + guardar -->
+          <div class="flex justify-between">
+            <BtnBack v-if="!saveCompleted" @click="goToStep(3)" />
+            <div v-else /><!-- spacer -->
             <button v-if="!saveCompleted"
               @click="handleSave"
               :disabled="qStore.isAnyLoading"
@@ -518,6 +532,23 @@ const CompletedBadge = defineComponent({
   },
 })
 
+const BtnBack = defineComponent({
+  emits: ['click'],
+  setup(_, { emit }) {
+    return () => h('button', {
+      class: 'px-4 py-2.5 rounded-xl border border-border-soft text-text-muted text-sm font-medium hover:bg-surface-alt hover:text-text-primary transition-all flex items-center gap-1.5',
+      onClick: () => emit('click'),
+    }, [
+      h('svg', {
+        xmlns: 'http://www.w3.org/2000/svg', class: 'w-3.5 h-3.5', viewBox: '0 0 24 24',
+        fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5',
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      }, [h('polyline', { points: '15 18 9 12 15 6' })]),
+      'Atrás',
+    ])
+  },
+})
+
 const BtnNext = defineComponent({
   props: { label: { type: String, default: 'Siguiente' } },
   emits: ['click'],
@@ -593,6 +624,28 @@ async function handlePreviewFile() {
 async function handleSave() {
   const result = await qStore.saveQuiz(props.courseId)
   if (result) saveCompleted.value = true
+}
+
+function startNewImport() {
+  // Resetear estado del quiz store pero mantener la lista de quizzes cargada
+  qStore.selectedCategory = null
+  qStore.categories = []
+  qStore.file = null
+  qStore.fileFormat = 'aiken'
+  qStore.previewResult = null
+  qStore.importResult = null
+  qStore.configureResult = null
+  qStore.settingsResult = null
+  qStore.loadMode = 'all'
+  qStore.numRandomQuestions = 10
+  qStore.timeLimit = 0
+  // No reseteamos selectedQuiz ni quizzes — el usuario puede elegir el mismo u otro
+  qStore.selectedQuiz = null
+
+  // Resetear estado local
+  saveCompleted.value = false
+  newCategoryName.value = ''
+  quizStep.value = 1
 }
 
 // Cargar quizzes al expandir por primera vez

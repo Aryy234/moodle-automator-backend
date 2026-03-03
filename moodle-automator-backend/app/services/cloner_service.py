@@ -23,6 +23,7 @@ from app.schemas.editor import (
     CourseCustomizationResponse,
     ReplacementDetail,
     PlaceholderScanResponse,
+    ExistingBlockInfo,
 )
 from app.core.config import settings
 
@@ -91,8 +92,15 @@ class ClonerService:
     ]
 
     def _html_has_template(self, html: str) -> bool:
-        """Verifica si un HTML contiene marcadores del template del curso base."""
-        return any(marker in html for marker in self.TEMPLATE_MARKERS)
+        """Verifica si un HTML contiene marcadores del template del curso base.
+        
+        También detecta elementos que ya fueron reemplazados pero conservan
+        el atributo ``data-placeholder``.
+        """
+        if any(marker in html for marker in self.TEMPLATE_MARKERS):
+            return True
+        # Detectar atributos data-placeholder insertados tras personalización
+        return "data-placeholder=" in html
 
     async def _get_general_section_html(self, course_id: int) -> tuple:
         """
@@ -153,7 +161,8 @@ class ClonerService:
 
     async def scan_course_placeholders(self, course_id: int) -> PlaceholderScanResponse:
         """
-        Escanea la sección General del curso para encontrar placeholders editables.
+        Escanea la sección General del curso para encontrar placeholders editables
+        y bloques avanzados (presentación, lectura, video) en labels.
         """
         html, section_info = await self._get_general_section_html(course_id)
         scan = self.html_processor.scan_placeholders(html)
@@ -164,6 +173,36 @@ class ClonerService:
             "No se encontró una fuente editable para el template."
         )
 
+        # --- Buscar bloques avanzados en labels de TODAS las secciones ---
+        existing_blocks: list[ExistingBlockInfo] = []
+        contents = await self.moodle.get_course_contents(course_id)
+        for section in (contents or []):
+            for module in section.get("modules", []):
+                if module.get("modname") != "label":
+                    continue
+                desc = module.get("description", "")
+                if not desc:
+                    continue
+                # Saltar labels que son parte del template principal
+                if self._html_has_template(desc):
+                    continue
+                # Detectar bloques: por data-block-type O por clase curcollapse
+                if "data-block-type" not in desc and "curcollapse" not in desc:
+                    continue
+                block_info = self.html_processor.scan_block_label(desc)
+                if block_info:
+                    block_info.label_cmid = module.get("id")
+                    block_info.label_instance_id = module.get("instance")
+                    block_info.section_id = section.get("id")
+                    block_info.section_number = section.get("section")
+                    existing_blocks.append(block_info)
+                    print(
+                        f"📦 Bloque '{block_info.block_type}' detectado en sección "
+                        f"{section.get('section')} (id={section.get('id')}, "
+                        f"cmid={block_info.label_cmid}, "
+                        f"items={len(block_info.items)})"
+                    )
+
         return PlaceholderScanResponse(
             course_id=course_id,
             section_name=section_info.get("section_name", "General"),
@@ -173,16 +212,91 @@ class ClonerService:
             placeholders=scan["placeholders"],
             schedule_found=scan["schedule_found"],
             bibliography_found=scan["bibliography_found"],
+            existing_schedule=scan.get("existing_schedule"),
+            existing_bibliography=scan.get("existing_bibliography"),
             course_title=scan["course_title"],
             course_description=scan["course_description"],
             template_source=source,
             can_save=can_save,
             save_hint=save_hint,
+            existing_blocks=existing_blocks,
         )
 
     # ==================================================================
     # PERSONALIZACIÓN DEL HTML
     # ==================================================================
+
+    def _find_existing_block_labels(self, section: dict) -> Dict[str, dict]:
+        """
+        Busca labels en una sección que contengan bloques avanzados.
+
+        Detecta por ``data-block-type`` O por IDs de collapse conocidos
+        (``curs1pres1``, ``curs1lect1``, ``curs1vid1``) o clase ``curcollapse``.
+
+        Retorna: ``{block_type: {cmid, instance_id}}``
+        """
+        result: Dict[str, dict] = {}
+        for module in section.get("modules", []):
+            if module.get("modname") != "label":
+                continue
+            desc = module.get("description", "")
+            if not desc:
+                continue
+            # Detectar: data-block-type O curcollapse (fallback)
+            if "data-block-type" not in desc and "curcollapse" not in desc:
+                continue
+            block_info = self.html_processor.scan_block_label(desc)
+            if block_info:
+                result[block_info.block_type] = {
+                    "cmid": module.get("id"),
+                    "instance_id": module.get("instance"),
+                }
+        return result
+
+    async def _upsert_block_label(
+        self,
+        course_id: int,
+        section_id: int,
+        block_type: str,
+        html_content: str,
+        label_name: str,
+        existing_blocks: Dict[str, dict],
+    ) -> str:
+        """
+        Crea o actualiza un label de bloque avanzado en una sección.
+
+        Si ya existe un label con el mismo ``block_type``, lo actualiza
+        usando ``update_label``. De lo contrario, crea uno nuevo.
+
+        Retorna una cadena descriptiva de la acción realizada.
+        """
+        existing = existing_blocks.get(block_type)
+        if existing:
+            instance_id = existing["instance_id"]
+            print(
+                f"🔍 _upsert_block_label: '{block_type}' encontrado → "
+                f"UPDATE instance_id={instance_id}, cmid={existing.get('cmid')}"
+            )
+            # Intentar actualizar — si falla, NO crear duplicado, propagar error
+            await self.moodle.update_label(instance_id, html_content)
+            print(
+                f"🔄 Label '{label_name}' actualizado en sección {section_id} "
+                f"(instance={instance_id})"
+            )
+            return f"Bloque de {label_name.lower()} actualizado"
+
+        # No existe → crear nuevo
+        print(
+            f"🔍 _upsert_block_label: '{block_type}' NO encontrado → CREATE nuevo label"
+        )
+        await self.moodle.create_label_in_section(
+            course_id=course_id,
+            section_id=section_id,
+            content=html_content,
+            name=label_name,
+        )
+        print(f"📝 Label '{label_name}' creado en sección {section_id}")
+        return f"Bloque de {label_name.lower()} creado como label independiente"
 
     async def customize_course(
         self,
@@ -262,7 +376,7 @@ class ClonerService:
                         )
 
                     # =======================================================
-                    # BLOQUES AVANZADOS — cada uno como un label separado
+                    # BLOQUES AVANZADOS — crear o actualizar label separado
                     # =======================================================
                     presentations = getattr(section_req, "presentations", None)
                     presentation_objective = getattr(section_req, "presentation_objective", None)
@@ -271,25 +385,51 @@ class ClonerService:
                     videos = getattr(section_req, "videos", None)
                     videos_summary = getattr(section_req, "videos_summary", None)
 
+                    # Detectar labels existentes para evitar duplicados.
+                    # Estrategia híbrida:
+                    #   1. IDs del frontend (existing_labels) → fuente más confiable
+                    #   2. Detección server-side → fallback
+                    #   Frontend tiene prioridad; server-side rellena lo que falte.
+                    existing_block_labels: Dict[str, dict] = {}
+                    if not preview_only and (presentations or main_reading or videos):
+                        # Server-side: escanear la sección buscando bloques
+                        existing_block_labels = self._find_existing_block_labels(section)
+
+                        # Frontend: mezclar IDs enviados por el frontend
+                        frontend_labels = getattr(section_req, "existing_labels", None)
+                        if frontend_labels:
+                            for btype, ref in frontend_labels.items():
+                                if ref and ref.label_instance_id:
+                                    existing_block_labels[btype] = {
+                                        "cmid": ref.label_cmid,
+                                        "instance_id": ref.label_instance_id,
+                                    }
+                                    print(
+                                        f"🏷️ Frontend proporcionó IDs para '{btype}': "
+                                        f"cmid={ref.label_cmid}, instance={ref.label_instance_id}"
+                                    )
+
                     # -- Bloque de presentaciones --
                     if presentations:
                         pres_html = self.html_processor.render_presentations_block(
                             presentations, presentation_objective
                         )
                         if not preview_only:
-                            await self.moodle.create_label_in_section(
+                            action_msg = await self._upsert_block_label(
                                 course_id=request.course_id,
                                 section_id=section_id,
-                                content=pres_html,
-                                name="Presentación",
+                                block_type="presentations",
+                                html_content=pres_html,
+                                label_name="Presentación",
+                                existing_blocks=existing_block_labels,
                             )
-                            print(f"📊 Label 'Presentación' creado en sección {section_id}")
                         else:
                             section_blocks_preview["presentations_block"] = pres_html
+                            action_msg = "Bloque de presentaciones (preview)"
                         all_details.append(ReplacementDetail(
                             field="presentations_block",
                             old_value="",
-                            new_value="Bloque de presentaciones creado como label independiente",
+                            new_value=action_msg,
                         ))
                         total_replacements += 1
 
@@ -304,19 +444,21 @@ class ClonerService:
                             suggested_title=getattr(section_req, "reading_suggested_title", None) or "Lecturas sugeridas",
                         )
                         if not preview_only:
-                            await self.moodle.create_label_in_section(
+                            action_msg = await self._upsert_block_label(
                                 course_id=request.course_id,
                                 section_id=section_id,
-                                content=reading_html,
-                                name="Lectura",
+                                block_type="reading",
+                                html_content=reading_html,
+                                label_name="Lectura",
+                                existing_blocks=existing_block_labels,
                             )
-                            print(f"📖 Label 'Lectura' creado en sección {section_id}")
                         else:
                             section_blocks_preview["reading_block"] = reading_html
+                            action_msg = "Bloque de lectura (preview)"
                         all_details.append(ReplacementDetail(
                             field="reading_block",
                             old_value="",
-                            new_value="Bloque de lectura creado como label independiente",
+                            new_value=action_msg,
                         ))
                         total_replacements += 1
 
@@ -326,19 +468,21 @@ class ClonerService:
                             videos, videos_summary
                         )
                         if not preview_only:
-                            await self.moodle.create_label_in_section(
+                            action_msg = await self._upsert_block_label(
                                 course_id=request.course_id,
                                 section_id=section_id,
-                                content=videos_html,
-                                name="Video",
+                                block_type="videos",
+                                html_content=videos_html,
+                                label_name="Video",
+                                existing_blocks=existing_block_labels,
                             )
-                            print(f"🎥 Label 'Video' creado en sección {section_id}")
                         else:
                             section_blocks_preview["videos_block"] = videos_html
+                            action_msg = "Bloque de video (preview)"
                         all_details.append(ReplacementDetail(
                             field="videos_block",
                             old_value="",
-                            new_value="Bloque de video creado como label independiente",
+                            new_value=action_msg,
                         ))
                         total_replacements += 1
 
