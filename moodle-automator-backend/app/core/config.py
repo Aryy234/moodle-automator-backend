@@ -31,8 +31,12 @@ class Settings(BaseSettings):
     api_title: str = "Moodle Course Automator API"
     api_description: str = "API para la automatización de duplicación y personalización de cursos en Moodle"
     
-    # CORS Settings (para desarrollo local)
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # CORS Settings (para desarrollo local y red local)
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://192.168.100.218:5173",
+    ]
     
     # Moodle API Endpoints (constantes derivadas)
     @property

@@ -1,12 +1,16 @@
 import axios from 'axios'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
+  baseURL: `${API_BASE_URL}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 120000, // 2 min para operaciones largas como duplicar
 })
+
+export { API_BASE_URL }
 
 // ========== Health ==========
 export const checkHealth = () => api.get('/courses/health/check')

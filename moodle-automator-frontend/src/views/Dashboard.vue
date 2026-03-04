@@ -38,7 +38,7 @@
             </svg>
           </div>
           <h3 class="text-sm font-semibold text-danger-dark mb-1">No se pudo conectar al backend</h3>
-          <p class="text-xs text-text-muted mb-4">Asegúrate de que el servidor FastAPI esté corriendo en localhost:8000</p>
+          <p class="text-xs text-text-muted mb-4">Asegúrate de que el servidor FastAPI esté corriendo en {{ apiBaseUrl }}</p>
           <button
             @click="store.verifyConnection()"
             class="px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-dark transition-colors"
@@ -331,12 +331,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/useCourseStore.js'
+import { API_BASE_URL } from '../api/index.js'
 import CourseCard from '../components/CourseCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const router = useRouter()
 const store = useCourseStore()
 
+const apiBaseUrl = API_BASE_URL
 const activeTab = ref('customize')
 const searchQuery = ref('')
 const duplicateResult = ref(null)
