@@ -423,6 +423,19 @@
             </button>
           </div>
 
+          <!-- Resumen de la presentación (opcional) -->
+          <div class="mt-3">
+            <label class="block text-xs font-medium text-text-secondary mb-1.5">
+              Resumen <span class="text-text-muted font-normal">(opcional)</span>
+            </label>
+            <textarea v-model="form.presentation_summary" rows="2"
+              class="w-full px-3 py-2 rounded-xl border border-border-soft bg-surface text-sm text-text-primary
+                     placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+                     transition-all duration-200 resize-none"
+              placeholder="Resumen de la(s) presentación(es)...">
+            </textarea>
+          </div>
+
           <!-- Objetivo de aprendizaje (opcional) -->
           <div class="mt-3">
             <label class="block text-xs font-medium text-text-secondary mb-1.5">

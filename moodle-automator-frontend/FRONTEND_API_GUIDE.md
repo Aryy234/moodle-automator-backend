@@ -137,6 +137,7 @@ Cada elemento del array describe un bloque de contenido detectado en **cualquier
 |-------|------|-------------|
 | `presentations` | array | `[{title, url}]` — cada presentación con su iframe |
 | `presentation_objective` | string \| null | Objetivo de aprendizaje del bloque |
+| `presentation_summary` | string \| null | Resumen de la(s) presentación(es) |
 
 **Lectura** (`block_type == "reading"`):
 
@@ -170,7 +171,8 @@ Cada elemento del array describe un bloque de contenido detectado en **cualquier
       { "title": "Introducción a Python", "url": "https://canva.com/slide1" },
       { "title": "POO en Python", "url": "https://canva.com/slide2" }
     ],
-    "presentation_objective": "Comprender las bases de Python"
+    "presentation_objective": "Comprender las bases de Python",
+    "presentation_summary": "En esta presentación veremos los fundamentos de Python..."
   },
   {
     "block_type": "reading",
@@ -318,6 +320,7 @@ Aplica las personalizaciones **sin guardar en Moodle**. Retorna el HTML resultan
         { "title": "Presentación 2", "url": "https://canva.com/..." }
       ],
       "presentation_objective": "Objetivo de aprendizaje...",
+      "presentation_summary": "Resumen de la presentación...",
 
       "main_reading": {
         "title": "Título del libro",
@@ -378,6 +381,7 @@ Aplica las personalizaciones **sin guardar en Moodle**. Retorna el HTML resultan
 |-------|------|-------------|
 | `presentations` | array | Lista de dicts `{title, url}`. **Soporta múltiples.** Cada uno genera su propio iframe dentro del bloque. |
 | `presentation_objective` | string | Objetivo de aprendizaje (aparece al pie del bloque) |
+| `presentation_summary` | string | Resumen de la(s) presentación(es) (aparece antes del objetivo) |
 
 **Bloque de Lectura** — se crea como label independiente en Moodle:
 
@@ -552,6 +556,7 @@ for (const block of existing_blocks) {
       // Pre-llenar array de presentaciones
       form.presentations = block.presentations; // [{title, url}]
       form.presentation_objective = block.presentation_objective;
+      form.presentation_summary = block.presentation_summary;
       break;
 
     case 'reading':
@@ -647,7 +652,7 @@ await fetch('/api/v1/editor/customize', { method: 'POST', body: JSON.stringify(c
 
 #### 🆕 Nuevas funcionalidades
 - **`existing_blocks` enriquecido**: El scan ahora extrae el contenido completo de cada bloque detectado (presentaciones, lectura, videos) con campos específicos por tipo:
-  - `presentations` / `presentation_objective` para bloques de presentación
+  - `presentations` / `presentation_objective` / `presentation_summary` para bloques de presentación
   - `main_reading` / `suggested_readings` / `reading_section_title` / `reading_button_text` / `reading_suggested_title` para bloques de lectura
   - `videos` / `videos_summary` para bloques de video
   - `collapse_label` — texto del botón collapse

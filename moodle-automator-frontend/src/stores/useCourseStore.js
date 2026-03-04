@@ -73,6 +73,7 @@ export const useCourseStore = defineStore('course', () => {
     section_number: null,
     // Semana 1 — Bloque Presentaciones
     presentations: [],
+    presentation_summary: null,
     presentation_objective: null,
     // Semana 1 — Bloque Lectura
     main_reading: null,
@@ -375,7 +376,7 @@ export const useCourseStore = defineStore('course', () => {
 
     // Campos escalares de bloques
     const blockScalars = [
-      'presentation_objective', 'videos_summary',
+      'presentation_summary', 'presentation_objective', 'videos_summary',
       'reading_collapse_label', 'reading_section_title',
       'reading_button_text', 'reading_suggested_title',
     ]
@@ -465,7 +466,7 @@ export const useCourseStore = defineStore('course', () => {
       'video_introductorio', 'unirse_clases', 'url_grabaciones',
       'perfil_docente', 'silabo', 'pea', 'bibliografia_url',
       'course_title', 'course_description',
-      'presentation_objective', 'videos_summary',
+      'presentation_summary', 'presentation_objective', 'videos_summary',
       'reading_collapse_label', 'reading_section_title',
       'reading_button_text', 'reading_suggested_title',
     ]
@@ -497,6 +498,7 @@ export const useCourseStore = defineStore('course', () => {
     const fd = formData.value
     // Limpiar campos de bloques actuales
     fd.presentations = []
+    fd.presentation_summary = null
     fd.presentation_objective = null
     fd.main_reading = null
     fd.suggested_readings = []
@@ -519,6 +521,7 @@ export const useCourseStore = defineStore('course', () => {
       switch (block.block_type) {
         case 'presentations':
           if (block.presentations?.length > 0) fd.presentations = block.presentations
+          if (block.presentation_summary) fd.presentation_summary = block.presentation_summary
           if (block.presentation_objective) fd.presentation_objective = block.presentation_objective
           break
         case 'reading':
@@ -582,6 +585,7 @@ export const useCourseStore = defineStore('course', () => {
       section_id: null,
       section_number: null,
       presentations: [],
+      presentation_summary: null,
       presentation_objective: null,
       main_reading: null,
       suggested_readings: [],

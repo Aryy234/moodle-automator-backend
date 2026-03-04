@@ -74,6 +74,7 @@ class SectionCustomizationData(BaseModel):
     # Bloques avanzados para presentaciones, lecturas y videos
     presentations: Optional[List[dict]] = Field(None, description="Lista de presentaciones: [{title, url}]. Soporta múltiples.")
     presentation_objective: Optional[str] = Field(None, description="Objetivo de aprendizaje de la(s) presentación(es)")
+    presentation_summary: Optional[str] = Field(None, description="Resumen de la(s) presentación(es)")
     main_reading: Optional[dict] = Field(None, description="Lectura principal: {title, author, url, summary}")
     suggested_readings: Optional[List[dict]] = Field(None, description="Lecturas sugeridas: [{title, author, url}]")
     videos: Optional[List[dict]] = Field(None, description="Lista de videos: [{title, url}]. Soporta múltiples.")
@@ -164,6 +165,9 @@ class ExistingBlockInfo(BaseModel):
     )
     presentation_objective: Optional[str] = Field(
         None, description="Objetivo de aprendizaje extraído del bloque"
+    )
+    presentation_summary: Optional[str] = Field(
+        None, description="Resumen extraído del bloque de presentaciones"
     )
 
     # --- Lectura (block_type == 'reading') ---

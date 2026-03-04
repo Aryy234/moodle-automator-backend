@@ -100,6 +100,7 @@ class HTMLProcessor:
         presentations: list,
         objective: Optional[str] = None,
         tips: Optional[List[str]] = None,
+        summary: Optional[str] = None,
     ) -> str:
         """
         Genera el HTML del bloque de presentación.
@@ -109,6 +110,7 @@ class HTMLProcessor:
             presentations: Lista de dicts con 'title' y 'url'.
             objective:     Objetivo de aprendizaje (opcional, se muestra al final).
             tips:          Lista de tips (opcional, se muestra antes del objetivo).
+            summary:       Resumen de la presentación (opcional, se muestra antes del objetivo).
         """
         if not presentations:
             return ""
@@ -134,6 +136,17 @@ class HTMLProcessor:
         </div>
       </div>'''
 
+        summary_section = ""
+        if summary:
+            summary_section = f'''
+      <!-- RESUMEN -->
+      <div class="row pt-4 g-2">
+        <div class="col-12 col-md-10 offset-md-2">
+          <h4 class="mb-2">Resumen</h4>
+          <p style="margin-bottom: 0; line-height: 1.7;">{summary}</p>
+        </div>
+      </div>'''
+
         sidebar = ""
         if tips or objective:
             inner = ""
@@ -150,7 +163,7 @@ class HTMLProcessor:
         </div>
       </div>'''
 
-        content = iframes + sidebar
+        content = iframes + summary_section + sidebar
         return self._collapse_wrapper("curs1pres1", "fa-person-chalkboard", collapse_label, content, block_type="presentations")
 
     def render_main_reading_block(
@@ -489,6 +502,7 @@ class HTMLProcessor:
         # Campos específicos por tipo
         presentations_list: Optional[list] = None
         presentation_objective: Optional[str] = None
+        presentation_summary_val: Optional[str] = None
         videos_list: Optional[list] = None
         videos_summary_val: Optional[str] = None
         main_reading_val: Optional[dict] = None
@@ -532,6 +546,7 @@ class HTMLProcessor:
 
             if block_type == "presentations":
                 presentations_list = extracted
+                presentation_summary_val = summary_text
             else:
                 videos_list = extracted
                 videos_summary_val = summary_text
@@ -612,6 +627,7 @@ class HTMLProcessor:
             # Presentaciones
             presentations=presentations_list,
             presentation_objective=presentation_objective,
+            presentation_summary=presentation_summary_val,
             # Lectura
             main_reading=main_reading_val,
             suggested_readings=suggested_readings_val,
@@ -855,6 +871,7 @@ class HTMLProcessor:
         # cloner_service.py como labels separados en Moodle.
         presentations: Optional[list] = None,
         presentation_objective: Optional[str] = None,
+        presentation_summary: Optional[str] = None,
         main_reading: Optional[dict] = None,
         suggested_readings: Optional[list] = None,
         videos: Optional[list] = None,

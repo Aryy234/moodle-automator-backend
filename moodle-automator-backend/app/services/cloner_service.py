@@ -380,6 +380,7 @@ class ClonerService:
                     # =======================================================
                     presentations = getattr(section_req, "presentations", None)
                     presentation_objective = getattr(section_req, "presentation_objective", None)
+                    presentation_summary = getattr(section_req, "presentation_summary", None)
                     main_reading = getattr(section_req, "main_reading", None)
                     suggested_readings = getattr(section_req, "suggested_readings", None)
                     videos = getattr(section_req, "videos", None)
@@ -412,7 +413,8 @@ class ClonerService:
                     # -- Bloque de presentaciones --
                     if presentations:
                         pres_html = self.html_processor.render_presentations_block(
-                            presentations, presentation_objective
+                            presentations, presentation_objective,
+                            summary=presentation_summary,
                         )
                         if not preview_only:
                             action_msg = await self._upsert_block_label(
